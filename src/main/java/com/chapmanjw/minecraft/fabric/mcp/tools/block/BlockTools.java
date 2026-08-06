@@ -68,7 +68,8 @@ public final class BlockTools {
         Map<String, String> props = new LinkedHashMap<>();
         JsonNode p = node.get("properties");
         if (p != null && p.isObject()) {
-            p.properties().forEach(e -> props.put(e.getKey(), e.getValue().asText()));
+            // fields() not properties(): MC 1.21.8's parent-classloader Jackson 2.13 predates properties().
+            p.fields().forEachRemaining(e -> props.put(e.getKey(), e.getValue().asText()));
         }
         String nbt = node.has("nbt") ? node.get("nbt").asText() : null;
         return new BlockSpec(id, props, nbt);

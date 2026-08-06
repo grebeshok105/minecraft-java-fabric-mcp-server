@@ -113,7 +113,10 @@ public final class Toon {
 
     private static void writeObjectFields(StringBuilder sb, ObjectNode obj, int depth, int indent) {
         boolean first = true;
-        for (Map.Entry<String, JsonNode> e : obj.properties()) {
+        // fields() rather than properties(): Minecraft 1.21.8 ships Jackson 2.13 in the parent
+        // classloader, which predates properties() (added 2.15) and shadows the bundled 2.22.
+        for (Iterator<Map.Entry<String, JsonNode>> fields = obj.fields(); fields.hasNext();) {
+            Map.Entry<String, JsonNode> e = fields.next();
             if (!first) {
                 sb.append('\n');
             }
@@ -259,7 +262,7 @@ public final class Toon {
     private static void writeListItemObject(
             StringBuilder sb, ObjectNode obj, int depth, int indent) {
         // Per §10: first field goes on the hyphen line. Remaining fields at depth + 1.
-        Iterator<Map.Entry<String, JsonNode>> it = obj.properties().iterator();
+        Iterator<Map.Entry<String, JsonNode>> it = obj.fields();
         Map.Entry<String, JsonNode> first = it.next();
 
         sb.append("- ");
@@ -369,7 +372,8 @@ public final class Toon {
             }
             // Verify every value is a primitive (no nested objects/arrays).
             Set<String> localKeys = new LinkedHashSet<>();
-            for (Map.Entry<String, JsonNode> e : element.properties()) {
+            for (Iterator<Map.Entry<String, JsonNode>> fields = element.fields(); fields.hasNext();) {
+                Map.Entry<String, JsonNode> e = fields.next();
                 JsonNode v = e.getValue();
                 if (v != null && (v.isObject() || v.isArray())) {
                     return null;
