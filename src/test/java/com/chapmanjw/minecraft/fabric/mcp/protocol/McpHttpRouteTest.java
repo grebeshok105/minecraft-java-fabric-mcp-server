@@ -102,8 +102,10 @@ class McpHttpRouteTest {
         assertEquals(200, r.status());
         assertEquals("text/event-stream; charset=utf-8", r.headers().get("Content-Type"));
         assertEquals("no-store", r.headers().get("Cache-Control"));
-        String text = new String(r.body(), StandardCharsets.UTF_8);
-        assertTrue(text.startsWith(":"), "SSE comment expected at start: " + text);
+        // The GET stream is held open by the transport (SSE hold-open contract): the
+        // response must be a streaming body, not a one-shot byte payload.
+        assertTrue(r.streaming(), "GET must return a held-open streaming response");
+        assertNotNull(r.streamBody());
     }
 
     @Test

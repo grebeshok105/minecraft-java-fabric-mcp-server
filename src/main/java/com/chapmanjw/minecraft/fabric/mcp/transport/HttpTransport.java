@@ -21,6 +21,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -61,6 +62,8 @@ public final class HttpTransport {
     private final SecurityFilter security;
     private final RateLimiter rateLimiter;
     private final Map<String, HttpRouteHandler> routes = new ConcurrentHashMap<>();
+    /** Held-open streaming exchanges (SSE), owned by their dedicated threads. */
+    private final Set<HttpExchange> activeStreams = ConcurrentHashMap.newKeySet();
     private HttpServer server;
 
     public HttpTransport(Config config) {
@@ -119,6 +122,17 @@ public final class HttpTransport {
 
     public void stop() {
         if (server != null) {
+            // Close held-open SSE streams first so their threads' blocked writes fail
+            // fast and server.stop() can drain immediately instead of waiting up to the
+            // delay for sockets that would otherwise stay open until the next heartbeat.
+            for (HttpExchange active : activeStreams) {
+                try {
+                    active.close();
+                } catch (RuntimeException e) {
+                    LOGGER.debug("Error closing active stream", e);
+                }
+            }
+            activeStreams.clear();
             // Allow up to 5 seconds for in-flight requests to drain; pending sockets are
             // RST'd after that. The MCP SDK times handlers out at the application layer.
             server.stop(5);
@@ -130,7 +144,10 @@ public final class HttpTransport {
     // --- dispatch ------------------------------------------------------------
 
     private void dispatch(HttpExchange exchange) {
-        try (exchange) {
+        // One-shot exchanges are closed here; streaming exchanges are handed to a
+        // dedicated thread that owns and closes them.
+        boolean streamed = false;
+        try {
             HttpRequest request = parse(exchange);
             String path = exchange.getRequestURI().getPath();
 
@@ -190,9 +207,53 @@ public final class HttpTransport {
                                         + escapeJson("Internal server error: " + e.getMessage())
                                         + "\"}}");
             }
-            writeResponse(exchange, response);
+            if (response.streaming()) {
+                streamed = true;
+                streamResponse(exchange, response);
+            } else {
+                writeResponse(exchange, response);
+            }
         } catch (IOException ioe) {
             LOGGER.warn("I/O error handling request", ioe);
+        } finally {
+            if (!streamed) {
+                exchange.close();
+            }
+        }
+    }
+
+    /**
+     * Hands the exchange to a dedicated daemon thread that writes the streaming body
+     * (SSE). The fixed HTTP pool thread returns as soon as the thread is spawned, so
+     * long-lived streams never occupy pool threads — held-open SSE sockets cannot
+     * starve POST handling. The stream thread owns the exchange and closes it when the
+     * body returns (client disconnect, server stop, or end of stream).
+     */
+    private void streamResponse(HttpExchange exchange, HttpResponse response) {
+        activeStreams.add(exchange);
+        Thread thread = namedThreadFactory("mcp-sse").newThread(() -> writeStream(exchange, response));
+        thread.start();
+    }
+
+    /** Runs the streaming body on the dedicated stream thread; owns the exchange. */
+    private void writeStream(HttpExchange exchange, HttpResponse response) {
+        try (exchange) {
+            Headers h = exchange.getResponseHeaders();
+            for (Map.Entry<String, String> e : response.headers().entrySet()) {
+                h.set(e.getKey(), e.getValue());
+            }
+            // responseLength 0 => chunked transfer encoding: no Content-Length, so the
+            // body stays open until we close it.
+            exchange.sendResponseHeaders(response.status(), 0);
+            try (OutputStream os = exchange.getResponseBody()) {
+                response.streamBody().writeTo(os);
+            }
+        } catch (IOException e) {
+            // Client disconnected mid-stream (broken pipe) or the server stopped and
+            // closed the exchange.
+            LOGGER.debug("SSE stream ended: {}", e.getMessage());
+        } finally {
+            activeStreams.remove(exchange);
         }
     }
 

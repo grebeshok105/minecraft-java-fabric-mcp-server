@@ -1,5 +1,7 @@
 package com.chapmanjw.minecraft.fabric.mcp.protocol;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,8 +23,9 @@ import com.chapmanjw.minecraft.fabric.mcp.transport.HttpRouteHandler;
  *   <li>{@code POST /mcp} — client sends a JSON-RPC request, server returns a JSON-RPC
  *       response (or 202 Accepted for notifications).
  *   <li>{@code GET /mcp} — open a server-to-client SSE stream for server-initiated
- *       messages. We accept this for forward compatibility but produce no messages
- *       (the v1 surface has no spontaneous server output).
+ *       messages. We produce no messages (the v1 surface has no spontaneous server
+ *       output) but hold the stream open with keep-alive comments: clients that see
+ *       the stream end treat the connection as lost and enter a reconnect loop.
  *   <li>{@code DELETE /mcp} — close the session. We treat it as a 204 No Content
  *       because we don't persist session state across requests.
  * </ul>
@@ -37,10 +40,21 @@ public final class McpHttpRoute implements HttpRouteHandler {
 
     private final McpDispatcher dispatcher;
     private final ObjectMapper mapper;
+    private final long heartbeatMillis;
 
     public McpHttpRoute(McpDispatcher dispatcher, ObjectMapper mapper) {
+        this(dispatcher, mapper, SseStreamBody.DEFAULT_HEARTBEAT_MILLIS);
+    }
+
+    /**
+     * @param heartbeatMillis SSE keep-alive interval for the GET stream. Tests pass a
+     *     short interval so hold-open behavior is observable in milliseconds instead of
+     *     the production ~15 s.
+     */
+    public McpHttpRoute(McpDispatcher dispatcher, ObjectMapper mapper, long heartbeatMillis) {
         this.dispatcher = dispatcher;
         this.mapper = mapper;
+        this.heartbeatMillis = heartbeatMillis;
     }
 
     @Override
@@ -105,20 +119,21 @@ public final class McpHttpRoute implements HttpRouteHandler {
     }
 
     /**
-     * Server-to-client SSE stream. The v1 surface has no spontaneous messages, so we
-     * accept the request, return an empty stream, and let the client tear it down.
+     * Server-to-client SSE stream. The v1 surface has no spontaneous messages, but the
+     * stream must stay open for the session's lifetime: a stream that ends immediately
+     * makes MCP clients treat the connection as lost and reconnect (up to a circuit
+     * breaker). The transport flushes the headers right away and then runs
+     * {@link SseStreamBody} on a dedicated thread — heartbeats every ~15 s, closed only
+     * on client disconnect or server stop, never occupying the fixed HTTP pool.
      * Returning 405 would break MCP clients that proactively open the SSE channel.
      */
     private HttpResponse handleGet() {
-        // The SSE body is a single comment line followed by \n\n so the EventSource
-        // client's reader unblocks immediately. We use the .bytes() builder method
-        // because .text() would clobber the text/event-stream Content-Type.
-        byte[] sseBody = ": no spontaneous messages — close at will\n\n"
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        return HttpResponse.builder(200)
-                .header("Cache-Control", "no-store")
-                .bytes(sseBody, "text/event-stream; charset=utf-8")
-                .build();
+        return HttpResponse.stream(
+                200,
+                Map.of(
+                        "Content-Type", "text/event-stream; charset=utf-8",
+                        "Cache-Control", "no-store"),
+                new SseStreamBody(heartbeatMillis));
     }
 
     /**
