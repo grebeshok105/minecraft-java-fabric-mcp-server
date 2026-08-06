@@ -120,9 +120,42 @@ public enum ToolCategory {
             Map.entry("client", CLIENT));
 
     /**
+     * Provider-declared domain mappings ({@link
+     * com.chapmanjw.minecraft.fabric.mcp.tools.ToolProvider#domainCategories}), consulted after
+     * the built-in map. Mutated only during registry construction at server start (single
+     * thread); concurrent map so a live tools/list never observes a torn read.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String, ToolCategory> PROVIDER_DOMAINS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Registers a provider's domain mappings. Built-in domains win: a key already present in
+     * {@link #DOMAIN_TO_CATEGORY} is rejected and returned so the caller can log it.
+     *
+     * @return the rejected (built-in-colliding) domain names, empty when all registered
+     */
+    public static java.util.List<String> registerProviderDomains(Map<String, ToolCategory> domains) {
+        java.util.List<String> rejected = new java.util.ArrayList<>();
+        for (var e : domains.entrySet()) {
+            if (DOMAIN_TO_CATEGORY.containsKey(e.getKey())) {
+                rejected.add(e.getKey());
+                continue;
+            }
+            PROVIDER_DOMAINS.put(e.getKey(), e.getValue());
+        }
+        return rejected;
+    }
+
+    /** Test hook: clears provider-registered domains (registry construction is per-start). */
+    static void clearProviderDomains() {
+        PROVIDER_DOMAINS.clear();
+    }
+
+    /**
      * Resolve the category for a tool wire-name. Tries the longest two-segment prefix
      * first (so {@code block_entity_*} doesn't land in the bare {@code block} bucket),
-     * then falls back to the first segment.
+     * then falls back to the first segment; provider-registered domains are consulted
+     * after the built-in map ({@link #registerProviderDomains}).
      *
      * @throws IllegalArgumentException if no mapping is registered for the tool's domain.
      */
@@ -137,16 +170,27 @@ public enum ToolCategory {
                 return e.getValue();
             }
         }
+        // Provider domains: same two-pass shape (multi-segment, then first segment).
+        for (var e : PROVIDER_DOMAINS.entrySet()) {
+            String domain = e.getKey();
+            if (domain.contains("_") && (toolName.equals(domain) || toolName.startsWith(domain + "_"))) {
+                return e.getValue();
+            }
+        }
         int underscore = toolName.indexOf('_');
         String firstSegment = underscore < 0 ? toolName : toolName.substring(0, underscore);
         ToolCategory cat = DOMAIN_TO_CATEGORY.get(firstSegment);
+        if (cat == null) {
+            cat = PROVIDER_DOMAINS.get(firstSegment);
+        }
         if (cat == null) {
             throw new IllegalArgumentException(
                     "No category mapping for tool '"
                             + toolName
                             + "' (domain prefix '"
                             + firstSegment
-                            + "'). Update ToolCategory.DOMAIN_TO_CATEGORY.");
+                            + "'). Update ToolCategory.DOMAIN_TO_CATEGORY or declare the domain"
+                            + " in your ToolProvider.domainCategories().");
         }
         return cat;
     }

@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import net.fabricmc.loader.api.FabricLoader;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -301,38 +303,142 @@ public final class ToolRegistration {
      * Build and populate a {@link ToolRegistry} for the current Minecraft target.
      * Reports the registration outcome (how many tools registered, how many filtered
      * out by version/module constraints) at INFO so the boot log is informative.
+     *
+     * <p>The server path ({@link #ALL_TOOL_CLASSES}) additionally discovers external
+     * {@link ToolProvider ToolProviders} via the {@code "mcp-tools"} Fabric entrypoint
+     * and registers their tool classes <strong>after</strong> the built-in list, through
+     * the same compatibility/gating filter. The client registry
+     * ({@link ClientToolRegistration}) does <strong>not</strong> iterate entrypoints.
      */
     public static ToolRegistry buildRegistry(ToolCompatibilityFilter filter) {
-        return buildRegistry(ALL_TOOL_CLASSES, filter);
+        // Server path: built-ins + external tool providers.
+        return buildRegistry(
+                ALL_TOOL_CLASSES,
+                filter,
+                FabricLoader.getInstance().getEntrypoints("mcp-tools", ToolProvider.class));
     }
 
     /**
-     * Build a {@link ToolRegistry} from an explicit list of tool classes. Used by the server
-     * entrypoint with {@link #ALL_TOOL_CLASSES} and by the client entrypoint
-     * ({@code ClientToolRegistration}) with the client-only tool list, so both surfaces share the
-     * same compatibility/category filtering loop.
+     * Build a {@link ToolRegistry} from an explicit list of tool classes. Used by the
+     * client entrypoint ({@code ClientToolRegistration}) and any other caller that
+     * supplies its own fixed list. <strong>No entrypoint iteration occurs</strong> — the
+     * provider seam is exclusive to the server path ({@link #buildRegistry(ToolCompatibilityFilter)}).
      */
     public static ToolRegistry buildRegistry(
             List<Class<? extends Tool>> toolClasses, ToolCompatibilityFilter filter) {
+        return buildRegistry(toolClasses, filter, List.of());
+    }
+
+    /**
+     * Build a {@link ToolRegistry} from an explicit list of tool classes and an explicit
+     * list of providers. Visible for testing (same package); the public entrypoints are
+     * the two-argument overloads above.
+     */
+    static ToolRegistry buildRegistry(
+            List<Class<? extends Tool>> toolClasses,
+            ToolCompatibilityFilter filter,
+            List<ToolProvider> providers) {
         ToolRegistry registry = new ToolRegistry();
         List<String> skipped = new ArrayList<>();
         for (Class<? extends Tool> klass : toolClasses) {
-            Optional<ToolDescriptor> descOpt = filter.evaluate(klass);
-            if (descOpt.isEmpty()) {
-                skipped.add(klass.getSimpleName());
-                continue;
-            }
-            try {
-                Tool tool = klass.getDeclaredConstructor().newInstance();
-                registry.register(descOpt.get(), tool);
-            } catch (ReflectiveOperationException e) {
-                LOGGER.warn("Failed to instantiate tool '{}': {}", klass.getName(), e.getMessage(), e);
-            }
+            registerToolClass(registry, filter, skipped, klass);
+        }
+        for (ToolProvider provider : providers) {
+            registerProviderTools(registry, filter, skipped, provider);
         }
         LOGGER.info(
                 "Registered {} MCP tools ({} skipped due to version/module/category constraints)",
                 registry.size(),
                 skipped.size());
         return registry;
+    }
+
+    private static void registerToolClass(
+            ToolRegistry registry,
+            ToolCompatibilityFilter filter,
+            List<String> skipped,
+            Class<? extends Tool> klass) {
+        Optional<ToolDescriptor> descOpt = filter.evaluate(klass);
+        if (descOpt.isEmpty()) {
+            skipped.add(klass.getSimpleName());
+            return;
+        }
+        try {
+            Tool tool = klass.getDeclaredConstructor().newInstance();
+            registry.register(descOpt.get(), tool);
+        } catch (ReflectiveOperationException e) {
+            LOGGER.warn("Failed to instantiate tool '{}': {}", klass.getName(), e.getMessage(), e);
+        }
+    }
+
+    private static void registerProviderTools(
+            ToolRegistry registry,
+            ToolCompatibilityFilter filter,
+            List<String> skipped,
+            ToolProvider provider) {
+        List<Class<? extends Tool>> classes;
+        try {
+            classes = provider.toolClasses();
+        } catch (RuntimeException e) {
+            LOGGER.warn(
+                    "Tool provider '{}' failed to supply tool classes: {}",
+                    provider.getClass().getName(),
+                    e.getMessage(),
+                    e);
+            return;
+        }
+        if (classes == null) {
+            LOGGER.warn(
+                    "Tool provider '{}' returned null tool list; ignoring",
+                    provider.getClass().getName());
+            return;
+        }
+        // Provider-declared domain categories must land before the compatibility filter
+        // resolves any of this provider's tool names (unknown domains are hard-rejected).
+        try {
+            var rejected = com.chapmanjw.minecraft.fabric.mcp.compat.ToolCategory.registerProviderDomains(
+                    provider.domainCategories());
+            if (!rejected.isEmpty()) {
+                LOGGER.warn(
+                        "Tool provider '{}' tried to remap built-in domain(s) {}; ignored",
+                        provider.getClass().getName(),
+                        rejected);
+            }
+        } catch (RuntimeException e) {
+            LOGGER.warn(
+                    "Tool provider '{}' failed to supply domain categories: {}",
+                    provider.getClass().getName(),
+                    e.getMessage(),
+                    e);
+        }
+        for (Class<? extends Tool> klass : classes) {
+            if (klass == null) {
+                LOGGER.warn(
+                        "Tool provider '{}' returned a null tool class; skipping",
+                        provider.getClass().getName());
+                continue;
+            }
+            try {
+                registerToolClass(registry, filter, skipped, klass);
+            } catch (IllegalStateException e) {
+                // Duplicate-name policy: a provider tool whose name collides with an
+                // already-registered tool (built-in or from an earlier provider) is
+                // logged and skipped, never fatal for the whole registry.
+                LOGGER.warn(
+                        "Skipping duplicate tool name from provider '{}': {}",
+                        provider.getClass().getName(),
+                        e.getMessage());
+            } catch (RuntimeException e) {
+                // Fail-closed per element: a single bad tool class (unmappable
+                // category, malformed annotation, etc.) is logged and skipped — it
+                // must never abort server boot or drop the already-registered tools.
+                LOGGER.warn(
+                        "Tool provider '{}' failed to register tool class '{}': {}",
+                        provider.getClass().getName(),
+                        klass.getName(),
+                        e.getMessage(),
+                        e);
+            }
+        }
     }
 }

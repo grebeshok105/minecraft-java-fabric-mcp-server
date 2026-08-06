@@ -21,7 +21,8 @@
     ],
     "client": [
       "com.chapmanjw.minecraft.fabric.mcp.McpClientMod"
-    ]
+    ],
+    "mcp-tools": []
   },
   "mixins": [],
   "accessWidener": "minecraft_fabric_mcp.accesswidener",
