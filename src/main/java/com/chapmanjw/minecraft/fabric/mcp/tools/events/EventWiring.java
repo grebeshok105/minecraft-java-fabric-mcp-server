@@ -82,7 +82,7 @@ public final class EventWiring {
                     if (player instanceof ServerPlayer sp) {
                         ObjectNode payload = mapper.createObjectNode();
                         payload.put("player_uuid", sp.getUUID().toString());
-                        payload.put("dimension", sp.level().dimension().identifier().toString());
+                        payload.put("dimension", dimensionId(sp.level()));
                         ObjectNode p = payload.putObject("position");
                         p.put("x", pos.getX());
                         p.put("y", pos.getY());
@@ -98,7 +98,7 @@ public final class EventWiring {
                         BlockPos pos = hitResult.getBlockPos();
                         ObjectNode payload = mapper.createObjectNode();
                         payload.put("player_uuid", sp.getUUID().toString());
-                        payload.put("dimension", sp.level().dimension().identifier().toString());
+                        payload.put("dimension", dimensionId(sp.level()));
                         ObjectNode p = payload.putObject("position");
                         p.put("x", pos.getX());
                         p.put("y", pos.getY());
@@ -153,11 +153,26 @@ public final class EventWiring {
         ObjectNode payload = mapper.createObjectNode();
         payload.put("player_uuid", p.getUUID().toString());
         payload.put("name", p.getName().getString());
-        payload.put("dimension", p.level().dimension().identifier().toString());
+        payload.put("dimension", dimensionId(p.level()));
         ObjectNode pos = payload.putObject("position");
         pos.put("x", p.getX());
         pos.put("y", p.getY());
         pos.put("z", p.getZ());
         bus.publish(EventEnvelope.now(type, payload));
     }
+
+    /**
+     * The player's dimension id as a stable string. ResourceKey.location() was renamed
+     * to identifier() in Minecraft 1.21.11; this helper keeps the call sites
+     * version-agnostic.
+     */
+    //? if mc_gte_21_11 {
+    private static String dimensionId(net.minecraft.world.level.Level level) {
+        return level.dimension().identifier().toString();
+    }
+    //?} else {
+    /*private static String dimensionId(net.minecraft.world.level.Level level) {
+        return level.dimension().location().toString();
+    }*/
+    //?}
 }

@@ -8,7 +8,9 @@ import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?}
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -36,7 +38,7 @@ final class BlockOps {
             ServerLevel level = ctx.requireLevel(dimensionId);
             BlockPos pos = new BlockPos(position.x(), position.y(), position.z());
             BlockState state = level.getBlockState(pos);
-            Identifier id =
+            var id =
                     level.registryAccess()
                             .lookupOrThrow(Registries.BLOCK)
                             .getKey(state.getBlock());
@@ -431,7 +433,7 @@ final class BlockOps {
         var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
         BlockState[] palette = new BlockState[spec.palette().size()];
         for (int i = 0; i < palette.length; i++) {
-            Identifier id = AdapterContext.parseIdentifier(spec.palette().get(i));
+            var id = AdapterContext.parseIdentifier(spec.palette().get(i));
             var block = registry.getValue(id);
             if (block == null) {
                 throw new AdapterException("blockFillColumns: unknown block id '" + spec.palette().get(i) + "'");
@@ -515,7 +517,7 @@ final class BlockOps {
         var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
         BlockState[] palette = new BlockState[spec.palette().size()];
         for (int i = 0; i < palette.length; i++) {
-            Identifier id = AdapterContext.parseIdentifier(spec.palette().get(i));
+            var id = AdapterContext.parseIdentifier(spec.palette().get(i));
             var block = registry.getValue(id);
             if (block == null) {
                 throw new AdapterException(
@@ -525,7 +527,7 @@ final class BlockOps {
         }
         BlockState[] strata = new BlockState[spec.strataBlocks().size()];
         for (int i = 0; i < strata.length; i++) {
-            Identifier id = AdapterContext.parseIdentifier(spec.strataBlocks().get(i));
+            var id = AdapterContext.parseIdentifier(spec.strataBlocks().get(i));
             var block = registry.getValue(id);
             if (block == null) {
                 throw new AdapterException(
@@ -535,7 +537,7 @@ final class BlockOps {
             strata[i] = block.defaultBlockState();
         }
         int[] strataThk = spec.strataThickness();
-        Identifier baseId = AdapterContext.parseIdentifier(spec.baseStone());
+        var baseId = AdapterContext.parseIdentifier(spec.baseStone());
         var baseBlock = registry.getValue(baseId);
         if (baseBlock == null) {
             throw new AdapterException(
@@ -652,14 +654,14 @@ final class BlockOps {
         requireRegionLoaded(level, spec.originX(), spec.originZ(), w, len, "terrainErodeRegion");
         var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
 
-        Identifier surfId = AdapterContext.parseIdentifier(spec.surface());
+        var surfId = AdapterContext.parseIdentifier(spec.surface());
         var surfBlock = registry.getValue(surfId);
         if (surfBlock == null) {
             throw new AdapterException(
                     "terrainErodeRegion: unknown surface block id '" + spec.surface() + "'");
         }
         BlockState surfaceState = surfBlock.defaultBlockState();
-        Identifier subId = AdapterContext.parseIdentifier(spec.subsurface());
+        var subId = AdapterContext.parseIdentifier(spec.subsurface());
         var subBlock = registry.getValue(subId);
         if (subBlock == null) {
             throw new AdapterException(
@@ -816,7 +818,7 @@ final class BlockOps {
                             + " exceeds the " + MAX_SCAN_VOLUME + "-block cap");
         }
         ServerLevel level = ctx.requireLevel(dimensionId);
-        Identifier matchId = matchBlockId == null ? null : AdapterContext.parseIdentifier(matchBlockId);
+        var matchId = matchBlockId == null ? null : AdapterContext.parseIdentifier(matchBlockId);
         List<MinecraftAdapter.BlockMatch> matches = new ArrayList<>();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int y = box.y1(); y <= box.y2() && matches.size() < limit; y++) {
@@ -824,7 +826,7 @@ final class BlockOps {
                 for (int x = box.x1(); x <= box.x2() && matches.size() < limit; x++) {
                     cursor.set(x, y, z);
                     BlockState state = level.getBlockState(cursor);
-                    Identifier id =
+                    var id =
                             level.registryAccess()
                                     .lookupOrThrow(Registries.BLOCK)
                                     .getKey(state.getBlock());
@@ -894,7 +896,7 @@ final class BlockOps {
                         continue;
                     }
                     nonAir++;
-                    Identifier id = blocks.getKey(state.getBlock());
+                    var id = blocks.getKey(state.getBlock());
                     histogram.merge(id == null ? "minecraft:air" : id.toString(), 1L, Long::sum);
                     if (!any) {
                         minX = x;

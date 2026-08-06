@@ -5,13 +5,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.impl.attachment.AttachmentRegistryImpl;
 import net.minecraft.core.BlockPos;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -54,7 +57,11 @@ final class DataOps {
         // `/data get` reports the value via a feedback message, but commandExecute uses
         // withSuppressedOutput() so output is empty. Read CommandStorage directly.
         CommandStorage storage = ctx.requireServer().getCommandStorage();
+        //? if mc_gte_21_11 {
         Identifier id = Identifier.tryParse(storageId(namespace));
+        //?} else {
+        /*ResourceLocation id = ResourceLocation.tryParse(storageId(namespace));*/
+        //?}
         if (id == null) {
             return Optional.empty();
         }
@@ -112,7 +119,7 @@ final class DataOps {
     List<String> dataStorageListNamespaces() {
         CommandStorage storage = ctx.requireServer().getCommandStorage();
         Set<String> namespaces = new java.util.LinkedHashSet<>();
-        try (Stream<Identifier> keys = storage.keys()) {
+        try (var keys = storage.keys()) {
             keys.forEach(id -> namespaces.add(id.getNamespace()));
         }
         List<String> out = new ArrayList<>(namespaces);
@@ -186,7 +193,11 @@ final class DataOps {
     }
 
     private static AttachmentType<?> lookupAttachment(String namespace, String key) {
+        //? if mc_gte_21_11 {
         Identifier id = Identifier.fromNamespaceAndPath(namespace, key);
+        //?} else {
+        /*ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, key);*/
+        //?}
         return AttachmentRegistryImpl.get(id);
     }
 
@@ -249,9 +260,9 @@ final class DataOps {
         if (t == null) {
             return List.of();
         }
-        Set<Identifier> syncable = AttachmentRegistryImpl.getSyncableAttachments();
+        var syncable = AttachmentRegistryImpl.getSyncableAttachments();
         List<String> out = new ArrayList<>();
-        for (Identifier id : syncable) {
+        for (var id : syncable) {
             if (id.getNamespace().equals(namespace)) {
                 AttachmentType<?> type = AttachmentRegistryImpl.get(id);
                 if (type != null && t.hasAttached(type)) {

@@ -10,7 +10,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -65,11 +69,15 @@ final class RegistryOps {
         if (registry == null) {
             return List.of();
         }
-        return registry.listElements().map(e -> e.key().identifier().toString()).sorted().toList();
+        return registry
+                .listElements()
+                .map(e -> AdapterContext.resourceKeyIdentifier(e.key()).toString())
+                .sorted()
+                .toList();
     }
 
     Optional<String> lootTableGetDefinition(String id) {
-        Identifier rl = AdapterContext.parseIdentifier(id);
+        var rl = AdapterContext.parseIdentifier(id);
         MinecraftServer s = ctx.requireServer();
         ResourceKey<LootTable> key = ResourceKey.create(Registries.LOOT_TABLE, rl);
         var lookup = s.reloadableRegistries().lookup();
@@ -110,7 +118,7 @@ final class RegistryOps {
 
     LootDropInfo lootTableGenerate(String id, Vec3d position, UUID killer, UUID lootingEntity) {
         MinecraftServer s = ctx.requireServer();
-        Identifier rl = AdapterContext.parseIdentifier(id);
+        var rl = AdapterContext.parseIdentifier(id);
         ResourceKey<LootTable> key = ResourceKey.create(Registries.LOOT_TABLE, rl);
         LootTable table;
         try {
@@ -155,7 +163,7 @@ final class RegistryOps {
     List<RecipeInfo> recipeList(String type) {
         RecipeManager mgr = ctx.requireServer().getRecipeManager();
         List<RecipeInfo> out = new ArrayList<>();
-        Identifier typeFilter = (type == null || type.isBlank()) ? null : AdapterContext.parseIdentifier(type);
+        var typeFilter = (type == null || type.isBlank()) ? null : AdapterContext.parseIdentifier(type);
         var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
         for (RecipeHolder<?> holder : mgr.getRecipes()) {
             RecipeInfo info = toRecipeInfo(holder, typeRegistry);
@@ -169,7 +177,7 @@ final class RegistryOps {
     }
 
     Optional<RecipeInfo> recipeGetDefinition(String id) {
-        Identifier rl = AdapterContext.parseIdentifier(id);
+        var rl = AdapterContext.parseIdentifier(id);
         ResourceKey<Recipe<?>> key = ResourceKey.create(Registries.RECIPE, rl);
         Optional<RecipeHolder<?>> holder = ctx.requireServer().getRecipeManager().byKey(key);
         if (holder.isEmpty()) {
@@ -180,7 +188,7 @@ final class RegistryOps {
     }
 
     List<RecipeInfo> recipeFindByResult(String itemId) {
-        Identifier match = AdapterContext.parseIdentifier(itemId);
+        var match = AdapterContext.parseIdentifier(itemId);
         String matchStr = match.toString();
         List<RecipeInfo> out = new ArrayList<>();
         var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
@@ -194,7 +202,7 @@ final class RegistryOps {
     }
 
     List<RecipeInfo> recipeFindByIngredient(String itemId) {
-        Identifier match = AdapterContext.parseIdentifier(itemId);
+        var match = AdapterContext.parseIdentifier(itemId);
         String matchStr = match.toString();
         List<RecipeInfo> out = new ArrayList<>();
         var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
@@ -217,15 +225,15 @@ final class RegistryOps {
             RecipeHolder<?> holder,
             net.minecraft.core.Registry<RecipeType<?>> typeRegistry) {
         Recipe<?> recipe = holder.value();
-        Identifier id = holder.id().identifier();
-        Identifier typeId = typeRegistry.getKey(recipe.getType());
+        var id = AdapterContext.resourceKeyIdentifier(holder.id());
+        var typeId = typeRegistry.getKey(recipe.getType());
         List<String> ingredients = new ArrayList<>();
         try {
             for (Ingredient ing : recipe.placementInfo().ingredients()) {
                 String repr = ing.items()
                         .findFirst()
                         .flatMap(Holder::unwrapKey)
-                        .map(rk -> rk.identifier().toString())
+                        .map(rk -> AdapterContext.resourceKeyIdentifier(rk).toString())
                         .orElse("minecraft:air");
                 ingredients.add(repr);
             }
@@ -240,7 +248,7 @@ final class RegistryOps {
                 ContextMap emptyContext = new ContextMap.Builder().create(new ContextKeySet.Builder().build());
                 var stack = displays.get(0).result().resolveForFirstStack(emptyContext);
                 if (stack != null && !stack.isEmpty()) {
-                    Identifier itemId = ctx.requireServer()
+                    var itemId = ctx.requireServer()
                             .registryAccess()
                             .lookupOrThrow(Registries.ITEM)
                             .getKey(stack.getItem());
@@ -261,7 +269,7 @@ final class RegistryOps {
     }
 
     List<String> tagListInRegistry(String registry) {
-        Identifier regId = AdapterContext.parseIdentifier(registry);
+        var regId = AdapterContext.parseIdentifier(registry);
         ResourceKey<net.minecraft.core.Registry<Object>> regKey =
                 ResourceKey.createRegistryKey(regId);
         var maybeRegistry = ctx.requireServer().registryAccess().lookup(regKey);
@@ -275,8 +283,8 @@ final class RegistryOps {
     }
 
     List<String> tagGetMembers(String registry, String tag) {
-        Identifier regId = AdapterContext.parseIdentifier(registry);
-        Identifier tagId = AdapterContext.parseIdentifier(tag);
+        var regId = AdapterContext.parseIdentifier(registry);
+        var tagId = AdapterContext.parseIdentifier(tag);
         ResourceKey<net.minecraft.core.Registry<Object>> regKey =
                 ResourceKey.createRegistryKey(regId);
         var maybeRegistry = ctx.requireServer().registryAccess().lookup(regKey);
@@ -292,15 +300,15 @@ final class RegistryOps {
         List<String> out = new ArrayList<>();
         holderSet.get().forEach(holder ->
                 holder.unwrapKey()
-                        .ifPresent(k -> out.add(k.identifier().toString())));
+                        .ifPresent(k -> out.add(AdapterContext.resourceKeyIdentifier(k).toString())));
         out.sort(String::compareTo);
         return out;
     }
 
     boolean tagCheckMembership(String registry, String tag, String member) {
-        Identifier regId = AdapterContext.parseIdentifier(registry);
-        Identifier tagId = AdapterContext.parseIdentifier(tag);
-        Identifier memberId = AdapterContext.parseIdentifier(member);
+        var regId = AdapterContext.parseIdentifier(registry);
+        var tagId = AdapterContext.parseIdentifier(tag);
+        var memberId = AdapterContext.parseIdentifier(member);
         ResourceKey<net.minecraft.core.Registry<Object>> regKey =
                 ResourceKey.createRegistryKey(regId);
         var maybeRegistry = ctx.requireServer().registryAccess().lookup(regKey);
@@ -325,7 +333,11 @@ final class RegistryOps {
     Optional<byte[]> resourceLoaderGetResource(String namespace, String path) {
         try {
             var manager = ctx.requireServer().getResourceManager();
+            //? if mc_gte_21_11 {
             var location = Identifier.fromNamespaceAndPath(namespace, path);
+            //?} else {
+            /*var location = ResourceLocation.fromNamespaceAndPath(namespace, path);*/
+            //?}
             var resource = manager.getResource(location);
             if (resource.isEmpty()) {
                 return Optional.empty();
@@ -343,7 +355,7 @@ final class RegistryOps {
     // =====================================================================
 
     int contentRegistryGetFuel(String itemId) {
-        Identifier rl = AdapterContext.parseIdentifier(itemId);
+        var rl = AdapterContext.parseIdentifier(itemId);
         var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
         var item = itemRegistry.getValue(rl);
         if (item == null) {
@@ -364,7 +376,7 @@ final class RegistryOps {
     }
 
     FlammableBlockInfo contentRegistryGetFlammableBlock(String blockId) {
-        Identifier rl = AdapterContext.parseIdentifier(blockId);
+        var rl = AdapterContext.parseIdentifier(blockId);
         var blockRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.BLOCK);
         var block = blockRegistry.getValue(rl);
         if (block == null) {
@@ -401,7 +413,7 @@ final class RegistryOps {
     }
 
     boolean contentRegistrySetFlammableBlock(String blockId, int burnChance, int spreadChance) {
-        Identifier rl = AdapterContext.parseIdentifier(blockId);
+        var rl = AdapterContext.parseIdentifier(blockId);
         var blockRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.BLOCK);
         var block = blockRegistry.getValue(rl);
         if (block == null) {
@@ -416,7 +428,7 @@ final class RegistryOps {
     }
 
     CompostableInfo contentRegistryGetCompostable(String itemId) {
-        Identifier rl = AdapterContext.parseIdentifier(itemId);
+        var rl = AdapterContext.parseIdentifier(itemId);
         var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
         var item = itemRegistry.getValue(rl);
         if (item == null) {
@@ -436,7 +448,7 @@ final class RegistryOps {
     }
 
     boolean contentRegistrySetCompostable(String itemId, float chance) {
-        Identifier rl = AdapterContext.parseIdentifier(itemId);
+        var rl = AdapterContext.parseIdentifier(itemId);
         var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
         var item = itemRegistry.getValue(rl);
         if (item == null) {
@@ -566,7 +578,7 @@ final class RegistryOps {
         if (view.isResourceBlank()) {
             return new FluidStackInfo(true, "minecraft:empty", 0L, view.getCapacity());
         }
-        Identifier id =
+        var id =
                 ctx.requireServer()
                         .registryAccess()
                         .lookupOrThrow(Registries.FLUID)
@@ -736,7 +748,7 @@ final class RegistryOps {
      */
     Optional<com.chapmanjw.minecraft.fabric.mcp.adapter.dto.BlockFamilyInfo> blockFamilyOf(
             String blockId) {
-        Identifier wanted = AdapterContext.parseIdentifier(blockId);
+        var wanted = AdapterContext.parseIdentifier(blockId);
         // BuiltInRegistries.BLOCK is a DefaultedRegistry: getValue() answers with the default entry
         // (minecraft:air) for an unregistered id rather than null, so a null check would never fire
         // and a typo'd block would masquerade as "air, which is in no family". getOptional() is the

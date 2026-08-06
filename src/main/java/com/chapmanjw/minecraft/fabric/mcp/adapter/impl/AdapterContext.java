@@ -10,7 +10,12 @@ import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -73,18 +78,24 @@ final class AdapterContext {
 
     ServerLevel requireLevel(String dimensionId) {
         MinecraftServer s = requireServer();
-        Identifier loc = parseIdentifier(dimensionId);
+        var loc = parseIdentifier(dimensionId);
         for (ServerLevel level : s.getAllLevels()) {
-            if (level.dimension().identifier().equals(loc)) {
+            if (resourceKeyIdentifier(level.dimension()).equals(loc)) {
                 return level;
             }
         }
         throw new AdapterException("Unknown dimension: " + dimensionId);
     }
 
+    //? if mc_gte_21_11 {
     static Identifier parseIdentifier(String id) {
         try {
             Identifier rl = Identifier.tryParse(id);
+    //?} else {
+    /*static ResourceLocation parseIdentifier(String id) {
+        try {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+        *///?}
             if (rl == null) {
                 throw new AdapterException("Invalid identifier: " + id);
             }
@@ -93,6 +104,21 @@ final class AdapterContext {
             throw new AdapterException("Invalid identifier '" + id + "': " + e.getMessage());
         }
     }
+
+    /**
+     * The identifier backing a ResourceKey. Renamed from {@code location()} to
+     * {@code identifier()} in Minecraft 1.21.11; this helper keeps call sites
+     * version-agnostic.
+     */
+    //? if mc_gte_21_11 {
+    static Identifier resourceKeyIdentifier(ResourceKey<?> key) {
+        return key.identifier();
+    }
+    //?} else {
+    /*static ResourceLocation resourceKeyIdentifier(ResourceKey<?> key) {
+        return key.location();
+    }*/
+    //?}
 
     CommandResult commandExecute(String command) {
         MinecraftServer s = requireServer();
@@ -115,7 +141,7 @@ final class AdapterContext {
 
     EntityInfo toEntityInfo(Entity e) {
         Vec3 vel = e.getDeltaMovement();
-        Identifier typeId =
+        var typeId =
                 requireServer()
                         .registryAccess()
                         .lookupOrThrow(Registries.ENTITY_TYPE)
@@ -135,7 +161,7 @@ final class AdapterContext {
                 e.getUUID(),
                 typeId == null ? "unknown" : typeId.toString(),
                 e.getCustomName() == null ? null : e.getCustomName().getString(),
-                e.level().dimension().identifier().toString(),
+                resourceKeyIdentifier(e.level().dimension()).toString(),
                 new Vec3d(e.getX(), e.getY(), e.getZ()),
                 new Vec3d(vel.x, vel.y, vel.z),
                 e.getYRot(),
@@ -148,7 +174,7 @@ final class AdapterContext {
     }
 
     ItemStackInfo toItemStackInfo(net.minecraft.world.item.ItemStack s) {
-        Identifier id =
+        var id =
                 requireServer()
                         .registryAccess()
                         .lookupOrThrow(Registries.ITEM)
@@ -164,7 +190,7 @@ final class AdapterContext {
                         .registryAccess()
                         .lookupOrThrow(net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE);
         for (var ct : s.getComponents().keySet()) {
-            Identifier ctId = componentRegistry.getKey(ct);
+            var ctId = componentRegistry.getKey(ct);
             if (ctId != null) {
                 componentKeys.add(ctId.toString());
             }

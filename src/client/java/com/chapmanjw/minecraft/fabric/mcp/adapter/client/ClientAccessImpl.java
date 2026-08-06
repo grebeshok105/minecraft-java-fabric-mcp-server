@@ -229,8 +229,13 @@ public final class ClientAccessImpl implements ClientAccess {
                     if (!inGame) {
                         return o;
                     }
+                    //? if mc_gte_21_11 {
                     o.put("dimension", mc.level.dimension().identifier().toString());
                     o.put("player_name", mc.player.getGameProfile().name());
+                    //?} else {
+                    /*o.put("dimension", mc.level.dimension().location().toString());
+                    o.put("player_name", mc.player.getGameProfile().getName());*/
+                    //?}
                     Vec3 p = mc.player.position();
                     putPos(o.putObject("pos"), p.x, p.y, p.z);
                     o.put("yaw", round(mc.player.getYRot()));

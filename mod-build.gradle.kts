@@ -111,6 +111,24 @@ run {
         major > 26 || (major == 26 && minor >= 2)
     }
     constPut?.invoke(constants, "mc_gte_26_2", mcGte262)
+
+    // `mc_gte_21_11` -- true for Minecraft 1.21.11 and later. 1.21.11 (Mojang's last
+    // obfuscated line) renamed net.minecraft.resources.ResourceLocation to Identifier
+    // (the name Yarn already used), renamed ResourceKey.location() to identifier(),
+    // moved GameRules into net.minecraft.world.level.gamerules with a top-level
+    // GameRule class (replacing the nested GameRules.Key), made WorldVersion
+    // packVersion() return a structured object, and changed GameRuleCategory from an
+    // enum with getDescriptionId() to a record with an Identifier id(). 1.21.8, the
+    // oldest supported target, still uses the pre-rename names, so this constant gates
+    // the compatibility blocks in the adapter impl layer.
+    val mcGte2111 = run {
+        val parts = mcVersion.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+        major > 1 || (major == 1 && minor > 21) || (major == 1 && minor == 21 && patch >= 11)
+    }
+    constPut?.invoke(constants, "mc_gte_21_11", mcGte2111)
 }
 
 // ---------------------------------------------------------------------------

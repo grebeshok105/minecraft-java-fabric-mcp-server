@@ -123,7 +123,7 @@ public final class MinecraftAdapterImpl implements MinecraftAdapter {
         MinecraftServer s = ctx.requireServer();
         List<String> dims = new ArrayList<>();
         for (ServerLevel level : s.getAllLevels()) {
-            dims.add(level.dimension().identifier().toString());
+            dims.add(AdapterContext.resourceKeyIdentifier(level.dimension()).toString());
         }
         double avgTickTimeNanos = computeAverageTickTimeNanos(s);
         double avgMspt = avgTickTimeNanos / 1_000_000.0;
@@ -145,17 +145,29 @@ public final class MinecraftAdapterImpl implements MinecraftAdapter {
                 // registeredToolCount: the adapter has no view of the tool registry; the
                 // server_get_status tool overrides this with the real count.
                 -1,
-                // World and pack formats. Identical API on all four targets (verified with javap),
-                // so no version gate. dataVersion is what structure_file_write has to embed in the
-                // NBT it writes; exposing it here means a caller can read it instead of hardcoding
-                // a number that silently rots across Minecraft versions.
+                // World and pack formats. dataVersion is identical on all targets (an int-backed
+                // record); packVersion() returns a structured object from 1.21.11 but a plain int
+                // on 1.21.8, so the .major() accessor is gated on mc_gte_21_11. dataVersion is
+                // what structure_file_write has to embed in the NBT it writes; exposing it here
+                // means a caller can read it instead of hardcoding a number that silently rots
+                // across Minecraft versions.
                 SharedConstants.getCurrentVersion().dataVersion().version(),
+                //? if mc_gte_21_11 {
                 SharedConstants.getCurrentVersion()
                         .packVersion(net.minecraft.server.packs.PackType.SERVER_DATA)
                         .major(),
+                //?} else {
+                /*SharedConstants.getCurrentVersion()
+                        .packVersion(net.minecraft.server.packs.PackType.SERVER_DATA),*/
+                //?}
+                //? if mc_gte_21_11 {
                 SharedConstants.getCurrentVersion()
                         .packVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES)
                         .major());
+                //?} else {
+                /*SharedConstants.getCurrentVersion()
+                        .packVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));*/
+                //?}
     }
 
     /**

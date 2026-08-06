@@ -11,7 +11,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -276,7 +278,7 @@ final class EntityOps {
             if (e instanceof LivingEntity le) {
                 List<StatusEffectInfo> out = new ArrayList<>();
                 for (var instance : le.getActiveEffects()) {
-                    Identifier id =
+                    var id =
                             s.registryAccess()
                                     .lookupOrThrow(Registries.MOB_EFFECT)
                                     .getKey(instance.getEffect().value());

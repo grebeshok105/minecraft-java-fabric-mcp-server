@@ -9,13 +9,20 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import net.minecraft.core.BlockPos;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
+//?} else {
+/*import net.minecraft.resources.ResourceLocation;*/
+//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+//? if mc_gte_21_11 {
 import net.minecraft.world.level.gamerules.GameRule;
 import net.minecraft.world.level.gamerules.GameRules;
+//?} else {
+/*import net.minecraft.world.level.GameRules;*/
+//?}
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.storage.LevelData;
@@ -54,7 +61,7 @@ final class WorldOps {
     List<String> levelListDimensions() {
         List<String> out = new ArrayList<>();
         for (ServerLevel level : ctx.requireServer().getAllLevels()) {
-            out.add(level.dimension().identifier().toString());
+            out.add(AdapterContext.resourceKeyIdentifier(level.dimension()).toString());
         }
         return out;
     }
@@ -70,12 +77,12 @@ final class WorldOps {
             // adapter only exposes the well-known vanilla mapping here. This preserves
             // the DimensionInfo schema across versions without reaching into
             // EnvironmentAttributeMap (whose keys are not part of the stable adapter API).
-            String idStr = level.dimension().identifier().toString();
+            String idStr = AdapterContext.resourceKeyIdentifier(level.dimension()).toString();
             boolean ultraWarm = "minecraft:the_nether".equals(idStr);
             boolean piglinSafe = "minecraft:the_nether".equals(idStr);
             boolean natural = "minecraft:overworld".equals(idStr);
             var typeKey = level.dimensionTypeRegistration().unwrapKey().orElse(null);
-            String typeId = typeKey == null ? idStr : typeKey.identifier().toString();
+            String typeId = typeKey == null ? idStr : AdapterContext.resourceKeyIdentifier(typeKey).toString();
             //? if mc_gte_26 {
             long timeOfDay = level.getOverworldClockTime();
             //?} else {
@@ -100,7 +107,11 @@ final class WorldOps {
     Optional<LevelInfo> levelGetInfo(String dimensionId) {
         try {
             ServerLevel level = ctx.requireLevel(dimensionId);
+            //? if mc_gte_21_11 {
             BlockPos spawn = level.getRespawnData().pos();
+            //?} else {
+            /*BlockPos spawn = level.getSharedSpawnPos();*/
+            //?}
             String weather =
                     level.isThundering() ? "thunder" : (level.isRaining() ? "rain" : "clear");
             // Which countdown is meaningful depends on what the weather currently IS. While a
@@ -128,7 +139,7 @@ final class WorldOps {
             *///?}
             return Optional.of(
                     new LevelInfo(
-                            level.dimension().identifier().toString(),
+                            AdapterContext.resourceKeyIdentifier(level.dimension()).toString(),
                             dayTime,
                             level.getGameTime(),
                             weather,
@@ -234,14 +245,22 @@ final class WorldOps {
 
     Vec3i levelGetSpawnPoint(String dimensionId) {
         ServerLevel level = ctx.requireLevel(dimensionId);
+        //? if mc_gte_21_11 {
         BlockPos pos = level.getRespawnData().pos();
+        //?} else {
+        /*BlockPos pos = level.getSharedSpawnPos();*/
+        //?}
         return new Vec3i(pos.getX(), pos.getY(), pos.getZ());
     }
 
     void levelSetSpawnPoint(String dimensionId, Vec3i position) {
         ServerLevel level = ctx.requireLevel(dimensionId);
         BlockPos pos = new BlockPos(position.x(), position.y(), position.z());
+        //? if mc_gte_21_11 {
         level.setRespawnData(LevelData.RespawnData.of(level.dimension(), pos, 0.0f, 0.0f));
+        //?} else {
+        /*level.setDefaultSpawnPos(pos, 0.0f);*/
+        //?}
     }
 
     void levelPlaySound(
@@ -359,11 +378,19 @@ final class WorldOps {
 
     Optional<GameRuleInfo> levelGetGameRule(String name) {
         GameRules rules = requireGameRules();
+        //? if mc_gte_21_11 {
         GameRule<?> rule = findGameRule(rules, name);
+        //?} else {
+        /*GameRules.Key<?> rule = findGameRule(rules, name);*/
+        //?}
         if (rule == null) {
             return Optional.empty();
         }
+        //? if mc_gte_21_11 {
         String value = rules.getAsString(rule);
+        //?} else {
+        /*String value = rules.getRule(rule).serialize();*/
+        //?}
         return Optional.of(new GameRuleInfo(name, value, gameRuleCategoryName(rule)));
     }
 
@@ -378,6 +405,7 @@ final class WorldOps {
     List<GameRuleInfo> levelListGameRules() {
         List<GameRuleInfo> out = new ArrayList<>();
         GameRules rules = requireGameRules();
+        //? if mc_gte_21_11 {
         rules.availableRules()
                 .forEach(
                         rule ->
@@ -386,6 +414,31 @@ final class WorldOps {
                                                 rule.id(),
                                                 rules.getAsString(rule),
                                                 gameRuleCategoryName(rule))));
+        //?} else {
+        /*rules.visitGameRuleTypes(new GameRules.GameRuleTypeVisitor() {
+            @Override
+            public void visitBoolean(
+                    GameRules.Key<GameRules.BooleanValue> key,
+                    GameRules.Type<GameRules.BooleanValue> type) {
+                out.add(
+                        new GameRuleInfo(
+                                key.getId(),
+                                rules.getRule(key).serialize(),
+                                gameRuleCategoryName(key)));
+            }
+
+            @Override
+            public void visitInteger(
+                    GameRules.Key<GameRules.IntegerValue> key,
+                    GameRules.Type<GameRules.IntegerValue> type) {
+                out.add(
+                        new GameRuleInfo(
+                                key.getId(),
+                                rules.getRule(key).serialize(),
+                                gameRuleCategoryName(key)));
+            }
+        });*/
+        //?}
         out.sort((a, b) -> a.name().compareTo(b.name()));
         return out;
     }
@@ -398,17 +451,33 @@ final class WorldOps {
      * record holding an {@link Identifier}; the identifier {@code toString()} is
      * stable across mapping layers ({@code minecraft:updates}).
      */
+    //? if mc_gte_21_11 {
     private static String gameRuleCategoryName(GameRule<?> rule) {
+    //?} else {
+    /*private static String gameRuleCategoryName(GameRules.Key<?> rule) {*/
+    //?}
         try {
+            //? if mc_gte_21_11 {
             var category = rule.category();
+            //?} else {
+            /*var category = rule.getCategory();*/
+            //?}
             if (category == null) {
                 return "";
             }
+            //? if mc_gte_21_11 {
             Identifier id = category.id();
             if (id == null) {
                 return "";
             }
             return id.toString();
+            //?} else {
+            /*String id = category.getDescriptionId();
+            if (id == null) {
+                return "";
+            }
+            return id;*/
+            //?}
         } catch (Throwable t) {
             // Belt and braces — if category() ever returns null on a future version
             // we still want a stable string rather than the toString leak.
@@ -440,19 +509,45 @@ final class WorldOps {
         *///?}
     }
 
+    //? if mc_gte_21_11 {
     private static GameRule<?> findGameRule(GameRules rules, String name) {
         return rules.availableRules()
                 .filter(r -> r.id().equals(name))
                 .findFirst()
                 .orElse(null);
     }
+    //?} else {
+    /*private static GameRules.Key<?> findGameRule(GameRules rules, String name) {
+        GameRules.Key<?>[] found = new GameRules.Key<?>[1];
+        rules.visitGameRuleTypes(new GameRules.GameRuleTypeVisitor() {
+            @Override
+            public void visitBoolean(
+                    GameRules.Key<GameRules.BooleanValue> key,
+                    GameRules.Type<GameRules.BooleanValue> type) {
+                if (found[0] == null && key.getId().equals(name)) {
+                    found[0] = key;
+                }
+            }
+
+            @Override
+            public void visitInteger(
+                    GameRules.Key<GameRules.IntegerValue> key,
+                    GameRules.Type<GameRules.IntegerValue> type) {
+                if (found[0] == null && key.getId().equals(name)) {
+                    found[0] = key;
+                }
+            }
+        });
+        return found[0];
+    }*/
+    //?}
 
     Optional<BiomeInfo> levelGetBiomeAt(String dimensionId, Vec3i position) {
         try {
             ServerLevel level = ctx.requireLevel(dimensionId);
             var biomeHolder = level.getBiome(new BlockPos(position.x(), position.y(), position.z()));
-            Identifier id =
-                    biomeHolder.unwrapKey().map(ResourceKey::identifier).orElse(null);
+            var id =
+                    biomeHolder.unwrapKey().map(k -> AdapterContext.resourceKeyIdentifier(k)).orElse(null);
             var biome = biomeHolder.value();
             BlockPos at = new BlockPos(position.x(), position.y(), position.z());
             return Optional.of(describeBiome(id, biome, at, level.getSeaLevel()));
@@ -473,8 +568,13 @@ final class WorldOps {
      * <p>downfall comes from the access-widened climateSettings record. It is NOT a weather
      * value: vanilla reads it only as the second axis into the grass/foliage colour gradient.
      */
+    //? if mc_gte_21_11 {
     private static BiomeInfo describeBiome(
             Identifier id, net.minecraft.world.level.biome.Biome biome, BlockPos at, int seaLevel) {
+    //?} else {
+    /*private static BiomeInfo describeBiome(
+            ResourceLocation id, net.minecraft.world.level.biome.Biome biome, BlockPos at, int seaLevel) {*/
+    //?}
         // Only precipitation is position-dependent among the things a server can answer:
         // temperature falls off with altitude, so one biome snows on a peak and rains below.
         String precipitation =
@@ -490,11 +590,19 @@ final class WorldOps {
                 biome.climateSettings.downfall(),
                 biome.hasPrecipitation(),
                 precipitation,
+                //? if mc_gte_21_11 {
                 effects.waterColor(),
                 effects.grassColorOverride().orElse(null),
                 effects.foliageColorOverride().orElse(null),
                 effects.dryFoliageColorOverride().orElse(null),
                 effects.grassColorModifier().getSerializedName());
+                //?} else {
+                /*effects.getWaterColor(),
+                effects.getGrassColorOverride().orElse(null),
+                effects.getFoliageColorOverride().orElse(null),
+                effects.getDryFoliageColorOverride().orElse(null),
+                effects.getGrassColorModifier().getSerializedName());*/
+                //?}
     }
 
     List<BiomeInfo> levelListBiomesInDimension(String dimensionId) {
@@ -508,7 +616,7 @@ final class WorldOps {
                 level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes();
         List<BiomeInfo> out = new ArrayList<>();
         for (var holder : possible) {
-            Identifier id = holder.unwrapKey().map(ResourceKey::identifier).orElse(null);
+            var id = holder.unwrapKey().map(k -> AdapterContext.resourceKeyIdentifier(k)).orElse(null);
             out.add(describeBiome(id, holder.value(), null, 0));
         }
         // possibleBiomes() is a Set with no defined iteration order, so sort for reproducibility
@@ -530,7 +638,7 @@ final class WorldOps {
         try {
             ServerLevel level = ctx.requireLevel(dimensionId);
             StructureTemplateManager mgr = ctx.requireServer().getStructureManager();
-            Identifier id = AdapterContext.parseIdentifier(name);
+            var id = AdapterContext.parseIdentifier(name);
             StructureTemplate template = mgr.getOrCreate(id);
             BlockPos origin = new BlockPos(box.x1(), box.y1(), box.z1());
             net.minecraft.core.Vec3i size =
@@ -590,8 +698,8 @@ final class WorldOps {
         // resolves each id through mgr.get(), which lazily loads custom-namespace templates from
         // disk, so size/onDisk/inMemory are populated correctly for both sources.
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
-        try (Stream<Identifier> templates = mgr.listTemplates()) {
-            templates.map(Identifier::toString).forEach(ids::add);
+        try (var templates = mgr.listTemplates()) {
+            templates.map(id -> id.toString()).forEach(ids::add);
         }
         ids.addAll(structureFileList());
         List<StructureInfo> out = new ArrayList<>();
@@ -601,7 +709,7 @@ final class WorldOps {
 
     Optional<StructureInfo> structureGetInfo(String name) {
         StructureTemplateManager mgr = ctx.requireServer().getStructureManager();
-        Identifier id = AdapterContext.parseIdentifier(name);
+        var id = AdapterContext.parseIdentifier(name);
         Optional<StructureTemplate> tpl = mgr.get(id);
         if (tpl.isEmpty()) {
             return Optional.empty();
@@ -625,7 +733,7 @@ final class WorldOps {
 
     boolean structureDelete(String name) {
         StructureTemplateManager mgr = ctx.requireServer().getStructureManager();
-        Identifier id = AdapterContext.parseIdentifier(name);
+        var id = AdapterContext.parseIdentifier(name);
         // The underlying StructureTemplateManager.remove returns void and silently no-ops on
         // unknown ids, so callers were getting "deleted" even when no structure existed.
         // Check both the in-memory cache AND the on-disk file before reporting success.
@@ -655,7 +763,11 @@ final class WorldOps {
      * {@code <world>/generated/<namespace>/structures/<path>.nbt}, or {@code null} when
      * the path cannot be derived.
      */
+    //? if mc_gte_21_11 {
     private Path structureFilePath(Identifier id) {
+    //?} else {
+    /*private Path structureFilePath(ResourceLocation id) {*/
+    //?}
         try {
             MinecraftServer s = ctx.requireServer();
             Path generated = s.getWorldPath(LevelResource.GENERATED_DIR);
@@ -701,7 +813,7 @@ final class WorldOps {
     }
 
     byte[] structureFileRead(String name) {
-        Identifier id = AdapterContext.parseIdentifier(name);
+        var id = AdapterContext.parseIdentifier(name);
         Path file = structureFilePath(id);
         if (file == null || !Files.isRegularFile(file)) {
             throw new AdapterException("Structure file not found: " + name);
@@ -714,7 +826,7 @@ final class WorldOps {
     }
 
     boolean structureFileWrite(String name, byte[] payload) {
-        Identifier id = AdapterContext.parseIdentifier(name);
+        var id = AdapterContext.parseIdentifier(name);
         Path file = structureFilePath(id);
         if (file == null) {
             return false;
@@ -732,7 +844,7 @@ final class WorldOps {
         // Idempotent: returns true whether the file was deleted now or was already gone.
         // structure_delete also removes the on-disk copy, so a subsequent file_delete
         // would otherwise look like a failure.
-        Identifier id = AdapterContext.parseIdentifier(name);
+        var id = AdapterContext.parseIdentifier(name);
         Path file = structureFilePath(id);
         if (file == null) {
             return false;
@@ -755,11 +867,19 @@ final class WorldOps {
     WorldBorderInfo worldborderGet(String dimensionId) {
         ServerLevel level = ctx.requireLevel(dimensionId);
         var wb = level.getWorldBorder();
+        //? if mc_gte_21_11 {
         long lerpTime = wb.getLerpTime();
         double lerpTarget = lerpTime > 0 ? wb.getLerpTarget() : -1.0;
         long lerpRemaining = lerpTime > 0
                 ? Math.max(0L, lerpTime - System.currentTimeMillis()) / MS_PER_TICK
                 : -1L;
+        //?} else {
+        /*long lerpTime = wb.getLerpRemainingTime();
+        double lerpTarget = lerpTime > 0 ? wb.getLerpTarget() : -1.0;
+        long lerpRemaining = lerpTime > 0
+                ? Math.max(0L, lerpTime) / MS_PER_TICK
+                : -1L;*/
+        //?}
         return new WorldBorderInfo(
                 wb.getCenterX(),
                 wb.getCenterZ(),
@@ -767,7 +887,11 @@ final class WorldOps {
                 wb.getWarningBlocks(),
                 wb.getWarningTime(),
                 wb.getDamagePerBlock(),
+                //? if mc_gte_21_11 {
                 wb.getSafeZone(),
+                //?} else {
+                /*wb.getDamageSafeZone(),*/
+                //?}
                 lerpTarget,
                 lerpRemaining);
     }
@@ -854,11 +978,11 @@ final class WorldOps {
         if (typeFilter == null || typeFilter.isBlank()) {
             typePredicate = holder -> true;
         } else {
-            Identifier wanted = AdapterContext.parseIdentifier(typeFilter);
+            var wanted = AdapterContext.parseIdentifier(typeFilter);
             typePredicate =
                     holder ->
                             holder.unwrapKey()
-                                    .map(k -> k.identifier().equals(wanted))
+                                    .map(k -> AdapterContext.resourceKeyIdentifier(k).equals(wanted))
                                     .orElse(false);
         }
 
@@ -875,7 +999,7 @@ final class WorldOps {
                             String type =
                                     record.getPoiType()
                                             .unwrapKey()
-                                            .map(k -> k.identifier().toString())
+                                            .map(k -> AdapterContext.resourceKeyIdentifier(k).toString())
                                             .orElse("unknown");
                             net.minecraft.core.BlockPos p = record.getPos();
                             out.add(

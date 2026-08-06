@@ -7,7 +7,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import net.minecraft.network.chat.Component;
+//? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
+//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.bossevents.CustomBossEvent;
 import net.minecraft.server.level.ServerPlayer;
@@ -253,7 +255,7 @@ final class GameplayOps {
     }
 
     Optional<BossbarInfo> bossbarGet(String id) {
-        Identifier rl = AdapterContext.parseIdentifier(id);
+        var rl = AdapterContext.parseIdentifier(id);
         var ev = ctx.requireServer().getCustomBossEvents().get(rl);
         if (ev == null) {
             return Optional.empty();
@@ -289,7 +291,7 @@ final class GameplayOps {
     }
 
     private CustomBossEvent requireBossbar(String id) {
-        Identifier rl = AdapterContext.parseIdentifier(id);
+        var rl = AdapterContext.parseIdentifier(id);
         return ctx.requireServer().getCustomBossEvents().get(rl);
     }
 
@@ -471,7 +473,7 @@ final class GameplayOps {
     }
 
     Optional<String> advancementGetDefinition(String advancementId) {
-        Identifier rl = AdapterContext.parseIdentifier(advancementId);
+        var rl = AdapterContext.parseIdentifier(advancementId);
         var holder = ctx.requireServer().getAdvancements().get(rl);
         if (holder == null) {
             return Optional.empty();
@@ -523,7 +525,7 @@ final class GameplayOps {
 
     List<String> functionList(String namespaceFilter) {
         List<String> out = new ArrayList<>();
-        for (Identifier id : ctx.requireServer().getFunctions().getFunctionNames()) {
+        for (var id : ctx.requireServer().getFunctions().getFunctionNames()) {
             String s = id.toString();
             if (namespaceFilter == null || namespaceFilter.isBlank()
                     || id.getNamespace().equals(namespaceFilter)) {
@@ -535,7 +537,7 @@ final class GameplayOps {
     }
 
     Optional<String> functionGetDefinition(String functionId) {
-        Identifier rl = AdapterContext.parseIdentifier(functionId);
+        var rl = AdapterContext.parseIdentifier(functionId);
         var fn = ctx.requireServer().getFunctions().get(rl);
         if (fn.isEmpty()) {
             return Optional.empty();
