@@ -67,9 +67,20 @@ public final class HttpTransport {
     private HttpServer server;
 
     public HttpTransport(Config config) {
+        this(config, DEFAULT_MAX_CONCURRENT_STREAMS);
+    }
+
+    /**
+     * Test constructor: a small stream cap makes the 503 rejection and slot-release
+     * behavior observable without opening hundreds of sockets. Production callers use
+     * the single-arg constructor and the default cap.
+     */
+    HttpTransport(Config config, int maxConcurrentStreams) {
         this.config = config;
         this.security = new SecurityFilter(config);
         this.rateLimiter = new RateLimiter(config.rateLimitRpm());
+        this.streamSlots = new java.util.concurrent.Semaphore(maxConcurrentStreams);
+        this.maxConcurrentStreams = maxConcurrentStreams;
     }
 
     // --- registration --------------------------------------------------------
@@ -240,15 +251,15 @@ public final class HttpTransport {
             namedThreadFactory("mcp-sse");
 
     /**
-     * Bounds concurrent held-open streams: each costs one daemon thread, and the rate
-     * limiter bounds only the creation RATE — a client that connects and never reads
-     * would otherwise accumulate parked threads without limit. 128 comfortably exceeds
-     * any legitimate local MCP client population; excess GETs get 503.
+     * Default bound on concurrent held-open streams: each costs one daemon thread, and
+     * the rate limiter bounds only the creation RATE — a client that connects and never
+     * reads would otherwise accumulate parked threads without limit. 128 comfortably
+     * exceeds any legitimate local MCP client population; excess GETs get 503.
      */
-    private static final int MAX_CONCURRENT_STREAMS = 128;
+    private static final int DEFAULT_MAX_CONCURRENT_STREAMS = 128;
 
-    private final java.util.concurrent.Semaphore streamSlots =
-            new java.util.concurrent.Semaphore(MAX_CONCURRENT_STREAMS);
+    private final int maxConcurrentStreams;
+    private final java.util.concurrent.Semaphore streamSlots;
     private final Set<Thread> streamThreads = ConcurrentHashMap.newKeySet();
 
     /**
@@ -261,7 +272,7 @@ public final class HttpTransport {
      */
     private boolean streamResponse(HttpExchange exchange, HttpResponse response) {
         if (!streamSlots.tryAcquire()) {
-            LOGGER.warn("Rejecting SSE stream: {} concurrent streams already open", MAX_CONCURRENT_STREAMS);
+            LOGGER.warn("Rejecting SSE stream: {} concurrent streams already open", maxConcurrentStreams);
             return false;
         }
         activeStreams.add(exchange);

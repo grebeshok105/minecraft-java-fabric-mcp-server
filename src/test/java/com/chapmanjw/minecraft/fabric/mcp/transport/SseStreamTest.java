@@ -177,6 +177,93 @@ class SseStreamTest {
         resp.body().close();
     }
 
+    /**
+     * The concurrency cap: with a 2-slot transport, two streams hold their slots, the
+     * third GET is rejected with 503 and a JSON error body, and closing one stream
+     * releases its slot so a follow-up GET streams again. Covers the semaphore
+     * acquire/reject/release cycle end to end over real sockets.
+     */
+    @Test
+    void streamCapRejectsExcessWith503AndReleasesSlots() throws Exception {
+        transport.stop();
+        transport = new HttpTransport(cappedConfig(), 2);
+        transport.registerRoute("/mcp", route(HEARTBEAT_MS));
+        transport.start();
+        String url = "http://127.0.0.1:" + port + "/mcp";
+
+        HttpResponse<InputStream> first = openStream(url);
+        HttpResponse<InputStream> second = openStream(url);
+        assertEquals(200, first.statusCode());
+        assertEquals(200, second.statusCode());
+
+        // Both slots held: the third GET must be refused with 503, not queued.
+        HttpResponse<String> third =
+                newClient()
+                        .send(
+                                HttpRequest.newBuilder(URI.create(url))
+                                        .header("Accept", "text/event-stream")
+                                        .GET()
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofString());
+        assertEquals(503, third.statusCode());
+        assertTrue(
+                third.body().contains("Too many concurrent event streams"),
+                "503 body must name the stream cap, got: " + third.body());
+
+        // Releasing one slot re-admits a stream. The release happens in the stream
+        // thread's finally after the disconnect is noticed (at the next heartbeat
+        // write), so poll with a deadline instead of asserting instantly.
+        first.body().close();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        HttpResponse<InputStream> fourth = null;
+        while (System.nanoTime() < deadline) {
+            HttpResponse<InputStream> attempt = openStream(url);
+            if (attempt.statusCode() == 200) {
+                fourth = attempt;
+                break;
+            }
+            assertEquals(503, attempt.statusCode(), "only 503 is acceptable while full");
+            Thread.sleep(HEARTBEAT_MS);
+        }
+        assertTrue(fourth != null, "a slot must free up after the first stream closed");
+        fourth.body().close();
+        second.body().close();
+    }
+
+    /** Same shape as setUp's config (the shared instance was stopped by the test). */
+    private Config cappedConfig() {
+        return new Config(
+                "127.0.0.1",
+                port,
+                false,
+                null,
+                false,
+                List.of(),
+                15000L,
+                600,
+                16 * 1024 * 1024,
+                1024,
+                256,
+                "info",
+                null,
+                null,
+                false,
+                List.of(),
+                List.of(),
+                "write",
+                false);
+    }
+
+    private HttpResponse<InputStream> openStream(String url) throws IOException, InterruptedException {
+        return newClient()
+                .send(
+                        HttpRequest.newBuilder(URI.create(url))
+                                .header("Accept", "text/event-stream")
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofInputStream());
+    }
+
     @Test
     void concurrentStreamsNeverStarvePostAndDisconnectsAreClean() throws Exception {
         transport.registerRoute("/mcp", route(HEARTBEAT_MS));
