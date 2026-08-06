@@ -146,16 +146,25 @@ public enum ToolCategory {
         return rejected;
     }
 
-    /** Test hook: clears provider-registered domains (registry construction is per-start). */
-    static void clearProviderDomains() {
+    /**
+     * Test hook: clears provider-registered domains so suites stay order-independent
+     * (registry construction is per-start in production; tests that register domains
+     * MUST reset in teardown). Public because seam tests live outside this package.
+     */
+    public static void clearProviderDomains() {
         PROVIDER_DOMAINS.clear();
     }
 
     /**
-     * Resolve the category for a tool wire-name. Tries the longest two-segment prefix
-     * first (so {@code block_entity_*} doesn't land in the bare {@code block} bucket),
-     * then falls back to the first segment; provider-registered domains are consulted
-     * after the built-in map ({@link #registerProviderDomains}).
+     * Resolve the category for a tool wire-name. Exact precedence, longest-prefix-first:
+     * built-in multi-segment domains, then provider multi-segment domains, then the
+     * built-in first-segment map, then provider first-segment domains. Consequences:
+     * a provider multi-segment domain (e.g. {@code level_set}) outranks the built-in
+     * FIRST-SEGMENT fallback for names under it — built-in tools are unaffected (they
+     * are registered before any provider domain lands), but such a domain does capture
+     * other providers' tools under the same prefix; and a provider tool whose first
+     * segment is already a built-in domain is categorized by that built-in fallback
+     * rather than skipped.
      *
      * @throws IllegalArgumentException if no mapping is registered for the tool's domain.
      */

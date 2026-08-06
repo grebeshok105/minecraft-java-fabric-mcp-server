@@ -29,6 +29,11 @@ import com.chapmanjw.minecraft.fabric.mcp.tools.level.LevelListDimensionsTool;
  */
 class ToolProviderSeamTest {
 
+    /** Provider domains land in ToolCategory's static registry — reset per test. */
+    @org.junit.jupiter.api.AfterEach
+    void resetProviderDomains() {
+        com.chapmanjw.minecraft.fabric.mcp.compat.ToolCategory.clearProviderDomains();
+    }
     // ---- fixtures ----------------------------------------------------------------
 
     private static final McEnvironment ENV =
@@ -182,8 +187,7 @@ class ToolProviderSeamTest {
      * A provider whose tool lives in a domain unknown to the built-in category map,
      * declared through {@link ToolProvider#domainCategories()}: the domain resolves and
      * the tool registers (the exact failure mode the first live OMP run exposed for
-     * {@code jujutsu_mod_status}). The domain is unique to this test — provider-domain
-     * state is registry-construction-scoped and deliberately not reset here.
+     * {@code jujutsu_mod_status}). Domain state is reset in {@code resetProviderDomains}.
      */
     @Test
     void providerDeclaredDomainRegistersItsTool() {

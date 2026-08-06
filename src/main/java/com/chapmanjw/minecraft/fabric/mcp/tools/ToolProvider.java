@@ -47,11 +47,15 @@ public interface ToolProvider {
      * {@code Map.of("jujutsu", ToolCategory.SERVER)} for tools named {@code jujutsu_*}.
      *
      * <p>{@link com.chapmanjw.minecraft.fabric.mcp.compat.ToolCategory#forToolName} resolves
-     * categories from a closed built-in domain map and rejects unknown domains, so a provider
-     * whose tool names live outside the built-in domains MUST declare them here or its tools
-     * are skipped by the compatibility filter. Built-in domains cannot be overridden: a
-     * conflicting key is ignored with a warning. Declared categories flow through the same
-     * enable/access gating as built-in tools.
+     * categories from a closed built-in domain map, so a provider whose tool names live in a
+     * domain with NO built-in mapping (first segment unknown) must declare it here or those
+     * tools are skipped by the compatibility filter. A tool whose first segment IS a built-in
+     * domain needs no declaration — the built-in fallback categorizes it. Exact lookup
+     * precedence (longest prefix first): built-in multi-segment, provider multi-segment,
+     * built-in first-segment, provider first-segment; built-in keys themselves cannot be
+     * remapped (an exact-key collision is ignored with a warning), and built-in tools are
+     * always registered before provider domains land. Declared categories flow through the
+     * same enable/access gating as built-in tools.
      *
      * @return domain-prefix to category mappings; empty when every contributed tool already
      *     lives in a built-in domain

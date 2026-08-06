@@ -122,9 +122,11 @@ public final class HttpTransport {
 
     public void stop() {
         if (server != null) {
-            // Close held-open SSE streams first so their threads' blocked writes fail
-            // fast and server.stop() can drain immediately instead of waiting up to the
-            // delay for sockets that would otherwise stay open until the next heartbeat.
+            // Close held-open SSE streams and interrupt their threads: closing makes the
+            // next write fail, interrupting wakes a thread parked in the heartbeat sleep
+            // immediately (otherwise cleanup lags up to one heartbeat interval). Daemon
+            // threads never block JVM exit either way; server.stop() drains promptly
+            // because the exchanges are already closed.
             for (HttpExchange active : activeStreams) {
                 try {
                     active.close();
@@ -133,6 +135,10 @@ public final class HttpTransport {
                 }
             }
             activeStreams.clear();
+            for (Thread streamThread : streamThreads) {
+                streamThread.interrupt();
+            }
+            streamThreads.clear();
             // Allow up to 5 seconds for in-flight requests to drain; pending sockets are
             // RST'd after that. The MCP SDK times handlers out at the application layer.
             server.stop(5);
@@ -208,8 +214,15 @@ public final class HttpTransport {
                                         + "\"}}");
             }
             if (response.streaming()) {
-                streamed = true;
-                streamResponse(exchange, response);
+                streamed = streamResponse(exchange, response);
+                if (!streamed) {
+                    writeResponse(
+                            exchange,
+                            HttpResponse.json(
+                                    503,
+                                    "{\"error\":{\"code\":503,\"message\":\"Too many concurrent"
+                                            + " event streams\"}}"));
+                }
             } else {
                 writeResponse(exchange, response);
             }
@@ -222,17 +235,53 @@ public final class HttpTransport {
         }
     }
 
+    /** Shared factory so stream threads number sequentially (mcp-sse-1, -2, ...). */
+    private static final java.util.concurrent.ThreadFactory SSE_THREAD_FACTORY =
+            namedThreadFactory("mcp-sse");
+
+    /**
+     * Bounds concurrent held-open streams: each costs one daemon thread, and the rate
+     * limiter bounds only the creation RATE — a client that connects and never reads
+     * would otherwise accumulate parked threads without limit. 128 comfortably exceeds
+     * any legitimate local MCP client population; excess GETs get 503.
+     */
+    private static final int MAX_CONCURRENT_STREAMS = 128;
+
+    private final java.util.concurrent.Semaphore streamSlots =
+            new java.util.concurrent.Semaphore(MAX_CONCURRENT_STREAMS);
+    private final Set<Thread> streamThreads = ConcurrentHashMap.newKeySet();
+
     /**
      * Hands the exchange to a dedicated daemon thread that writes the streaming body
      * (SSE). The fixed HTTP pool thread returns as soon as the thread is spawned, so
      * long-lived streams never occupy pool threads — held-open SSE sockets cannot
      * starve POST handling. The stream thread owns the exchange and closes it when the
-     * body returns (client disconnect, server stop, or end of stream).
+     * body returns (client disconnect, server stop, or end of stream). Returns false
+     * when no stream slot is free (caller answers 503) or the thread cannot start.
      */
-    private void streamResponse(HttpExchange exchange, HttpResponse response) {
+    private boolean streamResponse(HttpExchange exchange, HttpResponse response) {
+        if (!streamSlots.tryAcquire()) {
+            LOGGER.warn("Rejecting SSE stream: {} concurrent streams already open", MAX_CONCURRENT_STREAMS);
+            return false;
+        }
         activeStreams.add(exchange);
-        Thread thread = namedThreadFactory("mcp-sse").newThread(() -> writeStream(exchange, response));
-        thread.start();
+        try {
+            Thread thread = SSE_THREAD_FACTORY.newThread(() -> writeStream(exchange, response));
+            streamThreads.add(thread);
+            thread.start();
+            return true;
+        } catch (RuntimeException | Error e) {
+            // start() failure (e.g. native-thread exhaustion) must not leak the slot or
+            // leave the exchange registered as an active stream.
+            activeStreams.remove(exchange);
+            streamSlots.release();
+            try {
+                exchange.close();
+            } catch (RuntimeException closeError) {
+                LOGGER.debug("Error closing stream exchange after spawn failure", closeError);
+            }
+            throw e;
+        }
     }
 
     /** Runs the streaming body on the dedicated stream thread; owns the exchange. */
@@ -254,6 +303,8 @@ public final class HttpTransport {
             LOGGER.debug("SSE stream ended: {}", e.getMessage());
         } finally {
             activeStreams.remove(exchange);
+            streamThreads.remove(Thread.currentThread());
+            streamSlots.release();
         }
     }
 
