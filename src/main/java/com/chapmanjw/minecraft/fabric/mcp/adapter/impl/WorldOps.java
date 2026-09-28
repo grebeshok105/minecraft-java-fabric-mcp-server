@@ -322,25 +322,39 @@ final class WorldOps {
         // command surface.
         if (cosmetic) {
             ServerLevel level = ctx.requireLevel(dimensionId);
-            // EntitySpawnReason has the same enum surface on 1.21.11 and 26.1.x.
-            // Minecraft 26.2 moved the EntityType.<NAME> constants to a new
-            // net.minecraft.world.entity.EntityTypes class; EntityType itself now declares
-            // none. The entity class and the create(...) signature are unchanged.
-            //? if mc_gte_26_2 {
-            /*net.minecraft.world.entity.LightningBolt bolt =
-                    net.minecraft.world.entity.EntityTypes.LIGHTNING_BOLT.create(
-                            level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
-            *///?} else {
+            // The spawn-reason enum is MobSpawnType through 1.21.4 and EntitySpawnReason
+            // from 1.21.5 on. Minecraft 26.2 moved the EntityType.<NAME> constants to a
+            // new net.minecraft.world.entity.EntityTypes class; EntityType itself now
+            // declares none. The 6-arg create(level, consumer, pos, reason, b, b)
+            // overload exists on every target, unlike the 2-arg shortcut (1.21.5+ only).
             net.minecraft.world.entity.LightningBolt bolt =
-                    net.minecraft.world.entity.EntityType.LIGHTNING_BOLT.create(
-                            level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
-            //?}
+                    //? if mc_gte_26_2 {
+                    /*net.minecraft.world.entity.EntityTypes.LIGHTNING_BOLT*/
+                    //?} else {
+                    net.minecraft.world.entity.EntityType.LIGHTNING_BOLT
+                    //?}
+                            .create(
+                                    level,
+                                    null,
+                                    net.minecraft.core.BlockPos.containing(
+                                            position.x(), position.y(), position.z()),
+                                    //? if mc_gte_21_5 {
+                                    net.minecraft.world.entity.EntitySpawnReason.COMMAND,
+                                    //?} else {
+                                    /*net.minecraft.world.entity.MobSpawnType.COMMAND,*/
+                                    //?}
+                                    false,
+                                    false);
             if (bolt == null) {
                 throw new AdapterException("Failed to construct lightning bolt entity");
             }
             // Modern Mojang mappings dropped Entity.moveTo(double, double, double) --
             // use snapTo, which has the same teleport-without-interpolation semantics.
+            //? if mc_gte_21_5 {
             bolt.snapTo(position.x(), position.y(), position.z());
+            //?} else {
+            /*bolt.moveTo(position.x(), position.y(), position.z());*/
+            //?}
             bolt.setVisualOnly(true);
             level.addFreshEntity(bolt);
             return;
@@ -577,8 +591,13 @@ final class WorldOps {
     //?}
         // Only precipitation is position-dependent among the things a server can answer:
         // temperature falls off with altitude, so one biome snows on a peak and rains below.
+        //? if mc_gte_21_5 {
         String precipitation =
                 at == null ? null : biome.getPrecipitationAt(at, seaLevel).getSerializedName();
+        //?} else {
+        /*String precipitation =
+                at == null ? null : biome.getPrecipitationAt(at).getSerializedName();*/
+        //?}
         var effects = biome.getSpecialEffects();
         // Deliberately NOT calling getGrassColor / getFoliageColor / getDryFoliageColor: those
         // sample the client's grass.png and foliage.png colourmaps, which a dedicated server does
@@ -594,15 +613,33 @@ final class WorldOps {
                 effects.waterColor(),
                 effects.grassColorOverride().orElse(null),
                 effects.foliageColorOverride().orElse(null),
-                effects.dryFoliageColorOverride().orElse(null),
-                effects.grassColorModifier().getSerializedName());
                 //?} else {
                 /*effects.getWaterColor(),
                 effects.getGrassColorOverride().orElse(null),
-                effects.getFoliageColorOverride().orElse(null),
-                effects.getDryFoliageColorOverride().orElse(null),
-                effects.getGrassColorModifier().getSerializedName());*/
+                effects.getFoliageColorOverride().orElse(null),*/
                 //?}
+                dryFoliageColor(effects),
+                //? if mc_gte_21_11 {
+                effects.grassColorModifier().getSerializedName());
+                //?} else {
+                /*effects.getGrassColorModifier().getSerializedName());*/
+                //?}
+    }
+
+    // Dry-foliage reporting arrived with the 1.21.5 leaf-litter biomes; older
+    // targets have no accessor at all and report null.
+    private static Integer dryFoliageColor(net.minecraft.world.level.biome.BiomeSpecialEffects effects) {
+        //? if mc_gte_21_5 {
+        return effects
+                //? if mc_gte_21_11 {
+                .dryFoliageColorOverride()
+                //?} else {
+                /*.getDryFoliageColorOverride()*/
+                //?}
+                .orElse(null);
+        //?} else {
+        /*return null;*/
+        //?}
     }
 
     List<BiomeInfo> levelListBiomesInDimension(String dimensionId) {
@@ -648,7 +685,12 @@ final class WorldOps {
                             box.z2() - box.z1() + 1);
             // The 5th param is a List of blocks to ignore -- vanilla streams it
             // unconditionally, so null NPEs. Pass an empty list to capture everything.
+            //? if mc_gte_21_5 {
             template.fillFromWorld(level, origin, size, includeEntities, java.util.Collections.emptyList());
+            //?} else {
+            /*template.fillFromWorld(
+                    level, origin, size, includeEntities, net.minecraft.world.level.block.Blocks.AIR);*/
+            //?}
             template.setAuthor("minecraft-fabric-mcp");
             net.minecraft.nbt.CompoundTag tag =
                     template.save(new net.minecraft.nbt.CompoundTag());

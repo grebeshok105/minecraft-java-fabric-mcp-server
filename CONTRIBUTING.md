@@ -46,6 +46,12 @@ Gradle cache.
 ├── settings.gradle.kts              # pluginManagement + Stonecutter version matrix
 ├── mod-build.gradle.kts             # shared build logic, applied from each per-version script
 └── versions/
+    ├── 1.21.1/
+    │   ├── build.gradle.kts         # uses id("fabric-loom") — legacy LoomGradlePlugin
+    │   └── gradle.properties        # 1.21.1 deps (Codex-compatible pins) + JDK 21
+    ├── 1.21.8/
+    │   ├── build.gradle.kts         # uses id("fabric-loom") — legacy LoomGradlePlugin
+    │   └── gradle.properties        # 1.21.8 deps + JDK 21
     ├── 1.21.11/
     │   ├── build.gradle.kts         # uses id("fabric-loom") — legacy LoomGradlePlugin
     │   └── gradle.properties        # 1.21.11 deps + JDK 21

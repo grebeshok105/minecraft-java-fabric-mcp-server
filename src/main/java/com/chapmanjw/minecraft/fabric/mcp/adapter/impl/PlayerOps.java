@@ -7,11 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-//? if mc_gte_21_11 {
-import net.minecraft.resources.Identifier;
-//?}
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -355,8 +352,8 @@ final class PlayerOps {
         if (c == null || slot < 0 || slot >= c.getContainerSize()) {
             return false;
         }
-        var registry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
-        var holderOpt = registry.get(AdapterContext.parseIdentifier(item.id()));
+        var registry = BuiltInRegistries.ITEM;
+        var holderOpt = registry.getOptional(AdapterContext.parseIdentifier(item.id()));
         if (holderOpt.isEmpty()) {
             return false;
         }
@@ -398,7 +395,7 @@ final class PlayerOps {
             return 0;
         }
         var match = AdapterContext.parseIdentifier(itemId);
-        var registry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
+        var registry = BuiltInRegistries.ITEM;
         int total = 0;
         for (int i = 0; i < c.getContainerSize(); i++) {
             var stack = c.getItem(i);
@@ -419,9 +416,9 @@ final class PlayerOps {
 
     Optional<ItemStackInfo> itemStackDescribe(ItemSpec spec) {
         // Look up the item from the registry directly.
-        var registry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
+        var registry = BuiltInRegistries.ITEM;
         var id = AdapterContext.parseIdentifier(spec.id());
-        var holderOpt = registry.get(id);
+        var holderOpt = registry.getOptional(id);
         if (holderOpt.isEmpty()) {
             return Optional.empty();
         }

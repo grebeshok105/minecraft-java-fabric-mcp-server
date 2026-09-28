@@ -167,7 +167,13 @@ public final class ClientAccessImpl implements ClientAccess {
                                                 scaled = new NativeImage(w, h, false);
                                                 for (int yy = 0; yy < h; yy++) {
                                                     for (int xx = 0; xx < w; xx++) {
+                                                        //? if mc_gte_21_5 {
                                                         scaled.setPixel(xx, yy, img.getPixel(xx * ds, yy * ds));
+                                                        //?} else {
+                                                        /*scaled.setPixelRGBA(
+                                                                xx, yy,
+                                                                img.getPixelRGBA(xx * ds, yy * ds));*/
+                                                        //?}
                                                     }
                                                 }
                                                 toWrite = scaled;
@@ -188,7 +194,11 @@ public final class ClientAccessImpl implements ClientAccess {
                                             img.close();
                                         }
                                     };
+                            //? if mc_gte_21_5 {
                             Screenshot.takeScreenshot(fb, onImage);
+                            //?} else {
+                            /*onImage.accept(Screenshot.takeScreenshot(fb));*/
+                            //?}
                             return null;
                         })
                 // If merely scheduling failed (e.g. client thread not attached), fail the result so

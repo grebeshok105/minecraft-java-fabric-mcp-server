@@ -7,10 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
-//? if mc_gte_21_11 {
-import net.minecraft.resources.Identifier;
-//?}
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -38,10 +35,7 @@ final class BlockOps {
             ServerLevel level = ctx.requireLevel(dimensionId);
             BlockPos pos = new BlockPos(position.x(), position.y(), position.z());
             BlockState state = level.getBlockState(pos);
-            var id =
-                    level.registryAccess()
-                            .lookupOrThrow(Registries.BLOCK)
-                            .getKey(state.getBlock());
+            var id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
 
             Map<String, String> props = new java.util.LinkedHashMap<>();
             //? if mc_gte_26 {
@@ -381,7 +375,11 @@ final class BlockOps {
      */
     private static void requireRegionLoaded(
             ServerLevel level, int originX, int originZ, int width, int length, String op) {
+        //? if mc_gte_21_5 {
         int sentinel = level.getMinY();
+        //?} else {
+        /*int sentinel = level.getMinBuildHeight();*/
+        //?}
         int x0 = originX;
         int z0 = originZ;
         int x1 = originX + width - 1;
@@ -430,11 +428,11 @@ final class BlockOps {
         }
 
         ServerLevel level = ctx.requireLevel(dimensionId);
-        var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        var registry = BuiltInRegistries.BLOCK;
         BlockState[] palette = new BlockState[spec.palette().size()];
         for (int i = 0; i < palette.length; i++) {
             var id = AdapterContext.parseIdentifier(spec.palette().get(i));
-            var block = registry.getValue(id);
+            var block = registry.getOptional(id).orElse(null);
             if (block == null) {
                 throw new AdapterException("blockFillColumns: unknown block id '" + spec.palette().get(i) + "'");
             }
@@ -514,11 +512,11 @@ final class BlockOps {
         }
 
         ServerLevel level = ctx.requireLevel(dimensionId);
-        var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        var registry = BuiltInRegistries.BLOCK;
         BlockState[] palette = new BlockState[spec.palette().size()];
         for (int i = 0; i < palette.length; i++) {
             var id = AdapterContext.parseIdentifier(spec.palette().get(i));
-            var block = registry.getValue(id);
+            var block = registry.getOptional(id).orElse(null);
             if (block == null) {
                 throw new AdapterException(
                         "blockFillColumnsStrata: unknown block id '" + spec.palette().get(i) + "'");
@@ -528,7 +526,7 @@ final class BlockOps {
         BlockState[] strata = new BlockState[spec.strataBlocks().size()];
         for (int i = 0; i < strata.length; i++) {
             var id = AdapterContext.parseIdentifier(spec.strataBlocks().get(i));
-            var block = registry.getValue(id);
+            var block = registry.getOptional(id).orElse(null);
             if (block == null) {
                 throw new AdapterException(
                         "blockFillColumnsStrata: unknown strata block id '"
@@ -538,7 +536,7 @@ final class BlockOps {
         }
         int[] strataThk = spec.strataThickness();
         var baseId = AdapterContext.parseIdentifier(spec.baseStone());
-        var baseBlock = registry.getValue(baseId);
+        var baseBlock = registry.getOptional(baseId).orElse(null);
         if (baseBlock == null) {
             throw new AdapterException(
                     "blockFillColumnsStrata: unknown base stone id '" + spec.baseStone() + "'");
@@ -652,17 +650,17 @@ final class BlockOps {
         }
         ServerLevel level = ctx.requireLevel(dimensionId);
         requireRegionLoaded(level, spec.originX(), spec.originZ(), w, len, "terrainErodeRegion");
-        var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        var registry = BuiltInRegistries.BLOCK;
 
         var surfId = AdapterContext.parseIdentifier(spec.surface());
-        var surfBlock = registry.getValue(surfId);
+        var surfBlock = registry.getOptional(surfId).orElse(null);
         if (surfBlock == null) {
             throw new AdapterException(
                     "terrainErodeRegion: unknown surface block id '" + spec.surface() + "'");
         }
         BlockState surfaceState = surfBlock.defaultBlockState();
         var subId = AdapterContext.parseIdentifier(spec.subsurface());
-        var subBlock = registry.getValue(subId);
+        var subBlock = registry.getOptional(subId).orElse(null);
         if (subBlock == null) {
             throw new AdapterException(
                     "terrainErodeRegion: unknown subsurface block id '" + spec.subsurface() + "'");
@@ -826,10 +824,7 @@ final class BlockOps {
                 for (int x = box.x1(); x <= box.x2() && matches.size() < limit; x++) {
                     cursor.set(x, y, z);
                     BlockState state = level.getBlockState(cursor);
-                    var id =
-                            level.registryAccess()
-                                    .lookupOrThrow(Registries.BLOCK)
-                                    .getKey(state.getBlock());
+                    var id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
                     if (matchId == null || matchId.equals(id)) {
                         Map<String, String> props = new java.util.LinkedHashMap<>();
                         //? if mc_gte_26 {
@@ -876,7 +871,7 @@ final class BlockOps {
                             + " exceeds the " + MAX_SUMMARY_VOLUME + "-block cap");
         }
         ServerLevel level = ctx.requireLevel(dimensionId);
-        var blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        var blocks = BuiltInRegistries.BLOCK;
         java.util.Map<String, Long> histogram = new java.util.LinkedHashMap<>();
         long nonAir = 0;
         boolean any = false;
@@ -1049,7 +1044,7 @@ final class BlockOps {
     MinecraftAdapter.ErodedApplyResult terrainApplyErodedColumns(
             String dimensionId, MinecraftAdapter.ErodedApply spec) {
         ServerLevel level = ctx.requireLevel(dimensionId);
-        var registry = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        var registry = BuiltInRegistries.BLOCK;
         BlockState surfaceState = erodedBlockState(registry, spec.surface(), "surface");
         BlockState subState = erodedBlockState(registry, spec.subsurface(), "subsurface");
         BlockState air = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
@@ -1076,7 +1071,11 @@ final class BlockOps {
             // Re-check load state every column: chunks can unload between ticks when no
             // player is near. If this column's chunk is gone, stop WITHOUT advancing past
             // it (so its slice is retried next tick) and ask the chunk source to reload it.
+            //? if mc_gte_21_5 {
             if (!level.isLoaded(cursor.set(wx, level.getMinY(), wz))) {
+            //?} else {
+            /*if (!level.isLoaded(cursor.set(wx, level.getMinBuildHeight(), wz))) {*/
+            //?}
                 level.getChunk(
                         wx >> 4,
                         wz >> 4,
@@ -1126,7 +1125,7 @@ final class BlockOps {
             net.minecraft.core.Registry<net.minecraft.world.level.block.Block> registry,
             String id,
             String role) {
-        var block = registry.getValue(AdapterContext.parseIdentifier(id));
+        var block = registry.getOptional(AdapterContext.parseIdentifier(id)).orElse(null);
         if (block == null) {
             throw new AdapterException("terrainApplyErodedColumns: unknown " + role + " block id '" + id + "'");
         }

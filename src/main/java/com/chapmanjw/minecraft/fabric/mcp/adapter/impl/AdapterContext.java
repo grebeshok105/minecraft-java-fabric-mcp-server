@@ -8,7 +8,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 //? if mc_gte_21_11 {
 import net.minecraft.resources.Identifier;
@@ -141,11 +141,7 @@ final class AdapterContext {
 
     EntityInfo toEntityInfo(Entity e) {
         Vec3 vel = e.getDeltaMovement();
-        var typeId =
-                requireServer()
-                        .registryAccess()
-                        .lookupOrThrow(Registries.ENTITY_TYPE)
-                        .getKey(e.getType());
+        var typeId = BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
         float health = 0;
         float maxHealth = 0;
         if (e instanceof LivingEntity le) {
@@ -174,21 +170,14 @@ final class AdapterContext {
     }
 
     ItemStackInfo toItemStackInfo(net.minecraft.world.item.ItemStack s) {
-        var id =
-                requireServer()
-                        .registryAccess()
-                        .lookupOrThrow(Registries.ITEM)
-                        .getKey(s.getItem());
+        var id = BuiltInRegistries.ITEM.getKey(s.getItem());
         // Component map → list of component identifier strings. We intentionally drop
         // the values: at runtime, individual Component.toString() implementations leak
         // intermediary class names (e.g. `class_10711[...]`) and balloon the payload to
         // tens of kilobytes per stack. Callers that need component values should fetch
         // SNBT via entity_get_nbt or block_entity_get_nbt.
         List<String> componentKeys = new ArrayList<>();
-        var componentRegistry =
-                requireServer()
-                        .registryAccess()
-                        .lookupOrThrow(net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE);
+        var componentRegistry = BuiltInRegistries.DATA_COMPONENT_TYPE;
         for (var ct : s.getComponents().keySet()) {
             var ctId = componentRegistry.getKey(ct);
             if (ctId != null) {

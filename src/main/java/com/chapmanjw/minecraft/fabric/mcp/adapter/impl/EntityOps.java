@@ -9,18 +9,16 @@ import java.util.UUID;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
-//? if mc_gte_21_11 {
-import net.minecraft.resources.Identifier;
-//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+//? if mc_gte_21_5 {
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueOutput;
+//?}
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.storage.TagValueOutput;
 
 import com.chapmanjw.minecraft.fabric.mcp.adapter.AdapterException;
 import com.chapmanjw.minecraft.fabric.mcp.adapter.dto.CommandResult;
@@ -158,10 +156,14 @@ final class EntityOps {
             if (e == null) {
                 continue;
             }
+            //? if mc_gte_21_5 {
             TagValueOutput output =
                     TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
             e.saveWithoutId(output);
             CompoundTag tag = output.buildResult();
+            //?} else {
+            /*CompoundTag tag = e.saveWithoutId(new CompoundTag());*/
+            //?}
             return Optional.of(tag.toString());
         }
         return Optional.empty();
@@ -279,8 +281,7 @@ final class EntityOps {
                 List<StatusEffectInfo> out = new ArrayList<>();
                 for (var instance : le.getActiveEffects()) {
                     var id =
-                            s.registryAccess()
-                                    .lookupOrThrow(Registries.MOB_EFFECT)
+                            net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
                                     .getKey(instance.getEffect().value());
                     out.add(
                             new StatusEffectInfo(

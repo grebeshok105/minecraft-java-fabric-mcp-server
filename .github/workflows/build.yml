@@ -25,6 +25,10 @@ jobs:
           # Each Minecraft target ships against a specific JDK toolchain. We install
           # both JDKs on every job so Gradle's toolchain locator can pick the right
           # one regardless of which subproject the matrix entry targets.
+          - minecraft: "1.21.1"
+            jdk: 21
+          - minecraft: "1.21.8"
+            jdk: 21
           - minecraft: "1.21.11"
             jdk: 21
           - minecraft: "26.1.1"
