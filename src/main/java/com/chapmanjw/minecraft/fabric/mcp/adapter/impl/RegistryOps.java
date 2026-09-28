@@ -7,7 +7,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+//? if mc_gte_21_2 {
 import net.minecraft.core.Holder;
+//?}
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 //? if mc_gte_21_11 {
@@ -19,15 +22,19 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+//? if mc_gte_21_5 {
 import net.minecraft.util.context.ContextKeySet;
 import net.minecraft.util.context.ContextMap;
+//?}
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.RecipeType;
+//? if mc_gte_21_2 {
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
+//?}
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -64,6 +71,7 @@ final class RegistryOps {
     List<String> lootTableList() {
         var lootKey =
                 net.minecraft.world.level.storage.loot.LootDataType.TABLE.registryKey();
+        //? if mc_gte_21_5 {
         var registry =
                 ctx.requireServer().reloadableRegistries().lookup().lookup(lootKey).orElse(null);
         if (registry == null) {
@@ -74,13 +82,23 @@ final class RegistryOps {
                 .map(e -> AdapterContext.resourceKeyIdentifier(e.key()).toString())
                 .sorted()
                 .toList();
+        //?} else {
+        /*return ctx.requireServer().reloadableRegistries().getKeys(lootKey).stream()
+                .map(Object::toString)
+                .sorted()
+                .toList();*/
+        //?}
     }
 
     Optional<String> lootTableGetDefinition(String id) {
         var rl = AdapterContext.parseIdentifier(id);
         MinecraftServer s = ctx.requireServer();
         ResourceKey<LootTable> key = ResourceKey.create(Registries.LOOT_TABLE, rl);
+        //? if mc_gte_21_5 {
         var lookup = s.reloadableRegistries().lookup();
+        //?} else {
+        /*var lookup = s.reloadableRegistries().get();*/
+        //?}
         try {
             LootTable table = s.reloadableRegistries().getLootTable(key);
             if (table == LootTable.EMPTY) {
@@ -164,7 +182,7 @@ final class RegistryOps {
         RecipeManager mgr = ctx.requireServer().getRecipeManager();
         List<RecipeInfo> out = new ArrayList<>();
         var typeFilter = (type == null || type.isBlank()) ? null : AdapterContext.parseIdentifier(type);
-        var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
+        var typeRegistry = BuiltInRegistries.RECIPE_TYPE;
         for (RecipeHolder<?> holder : mgr.getRecipes()) {
             RecipeInfo info = toRecipeInfo(holder, typeRegistry);
             if (typeFilter != null && !typeFilter.toString().equals(info.type())) {
@@ -178,12 +196,16 @@ final class RegistryOps {
 
     Optional<RecipeInfo> recipeGetDefinition(String id) {
         var rl = AdapterContext.parseIdentifier(id);
+        //? if mc_gte_21_2 {
         ResourceKey<Recipe<?>> key = ResourceKey.create(Registries.RECIPE, rl);
         Optional<RecipeHolder<?>> holder = ctx.requireServer().getRecipeManager().byKey(key);
+        //?} else {
+        /*Optional<RecipeHolder<?>> holder = ctx.requireServer().getRecipeManager().byKey(rl);*/
+        //?}
         if (holder.isEmpty()) {
             return Optional.empty();
         }
-        var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
+        var typeRegistry = BuiltInRegistries.RECIPE_TYPE;
         return Optional.of(toRecipeInfo(holder.get(), typeRegistry));
     }
 
@@ -191,7 +213,7 @@ final class RegistryOps {
         var match = AdapterContext.parseIdentifier(itemId);
         String matchStr = match.toString();
         List<RecipeInfo> out = new ArrayList<>();
-        var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
+        var typeRegistry = BuiltInRegistries.RECIPE_TYPE;
         for (RecipeHolder<?> holder : ctx.requireServer().getRecipeManager().getRecipes()) {
             RecipeInfo info = toRecipeInfo(holder, typeRegistry);
             if (matchStr.equals(info.result())) {
@@ -205,7 +227,7 @@ final class RegistryOps {
         var match = AdapterContext.parseIdentifier(itemId);
         String matchStr = match.toString();
         List<RecipeInfo> out = new ArrayList<>();
-        var typeRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.RECIPE_TYPE);
+        var typeRegistry = BuiltInRegistries.RECIPE_TYPE;
         for (RecipeHolder<?> holder : ctx.requireServer().getRecipeManager().getRecipes()) {
             RecipeInfo info = toRecipeInfo(holder, typeRegistry);
             if (info.ingredients().contains(matchStr)) {
@@ -225,9 +247,14 @@ final class RegistryOps {
             RecipeHolder<?> holder,
             net.minecraft.core.Registry<RecipeType<?>> typeRegistry) {
         Recipe<?> recipe = holder.value();
-        var id = AdapterContext.resourceKeyIdentifier(holder.id());
+        //? if mc_gte_21_2 {
+        String id = AdapterContext.resourceKeyIdentifier(holder.id()).toString();
+        //?} else {
+        /*String id = holder.id().toString();*/
+        //?}
         var typeId = typeRegistry.getKey(recipe.getType());
         List<String> ingredients = new ArrayList<>();
+        //? if mc_gte_21_2 {
         try {
             for (Ingredient ing : recipe.placementInfo().ingredients()) {
                 String repr = ing.items()
@@ -240,18 +267,31 @@ final class RegistryOps {
         } catch (Throwable t) {
             // placementInfo can throw for special recipes; leave ingredients empty.
         }
+        //?} else {
+        /*try {
+            for (Ingredient ing : recipe.getIngredients()) {
+                var stacks = ing.getItems();
+                if (stacks.length == 0) {
+                    ingredients.add("minecraft:air");
+                    continue;
+                }
+                var itemId = BuiltInRegistries.ITEM.getKey(stacks[0].getItem());
+                ingredients.add(itemId == null ? "minecraft:air" : itemId.toString());
+            }
+        } catch (Throwable t) {
+            // getIngredients can throw for special recipes; leave ingredients empty.
+        }
+        *///?}
         String resultId = "";
         int resultCount = 0;
+        //? if mc_gte_21_2 {
         try {
             List<RecipeDisplay> displays = recipe.display();
             if (!displays.isEmpty()) {
                 ContextMap emptyContext = new ContextMap.Builder().create(new ContextKeySet.Builder().build());
                 var stack = displays.get(0).result().resolveForFirstStack(emptyContext);
                 if (stack != null && !stack.isEmpty()) {
-                    var itemId = ctx.requireServer()
-                            .registryAccess()
-                            .lookupOrThrow(Registries.ITEM)
-                            .getKey(stack.getItem());
+                    var itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
                     resultId = itemId == null ? "" : itemId.toString();
                     resultCount = stack.getCount();
                 }
@@ -259,10 +299,26 @@ final class RegistryOps {
         } catch (Throwable t) {
             // Best-effort; some recipes don't surface a single concrete result.
         }
+        //?} else {
+        /*try {
+            var stack = recipe.getResultItem(ctx.requireServer().registryAccess());
+            if (stack != null && !stack.isEmpty()) {
+                var itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+                resultId = itemId == null ? "" : itemId.toString();
+                resultCount = stack.getCount();
+            }
+        } catch (Throwable t) {
+            // Best-effort; some recipes don't surface a single concrete result.
+        }
+        *///?}
         return new RecipeInfo(
-                id.toString(),
+                id,
                 typeId == null ? "" : typeId.toString(),
+                //? if mc_gte_21_2 {
                 recipe.group(),
+                //?} else {
+                /*recipe.getGroup(),*/
+                //?}
                 ingredients,
                 resultId,
                 resultCount);
@@ -276,7 +332,7 @@ final class RegistryOps {
         if (maybeRegistry.isEmpty()) {
             return List.of();
         }
-        return maybeRegistry.get().getTags()
+        return maybeRegistry.get().listTags()
                 .map(named -> named.key().location().toString())
                 .sorted()
                 .toList();
@@ -356,14 +412,19 @@ final class RegistryOps {
 
     int contentRegistryGetFuel(String itemId) {
         var rl = AdapterContext.parseIdentifier(itemId);
-        var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
-        var item = itemRegistry.getValue(rl);
+        var itemRegistry = BuiltInRegistries.ITEM;
+        var item = itemRegistry.getOptional(rl).orElse(null);
         if (item == null) {
             return 0;
         }
         // FuelValues is part of vanilla; the Fabric module's BuildCallback merely
         // injects entries during build, so reading goes through the vanilla map.
+        //? if mc_gte_21_5 {
         return ctx.requireServer().fuelValues().burnDuration(new net.minecraft.world.item.ItemStack(item));
+        //?} else {
+        /*return net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.getFuel()
+                .getOrDefault(item, 0);*/
+        //?}
     }
 
     boolean contentRegistrySetFuel(String itemId, int burnTimeTicks) {
@@ -377,8 +438,8 @@ final class RegistryOps {
 
     FlammableBlockInfo contentRegistryGetFlammableBlock(String blockId) {
         var rl = AdapterContext.parseIdentifier(blockId);
-        var blockRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.BLOCK);
-        var block = blockRegistry.getValue(rl);
+        var blockRegistry = BuiltInRegistries.BLOCK;
+        var block = blockRegistry.getOptional(rl).orElse(null);
         if (block == null) {
             return FlammableBlockInfo.notFlammable();
         }
@@ -414,8 +475,8 @@ final class RegistryOps {
 
     boolean contentRegistrySetFlammableBlock(String blockId, int burnChance, int spreadChance) {
         var rl = AdapterContext.parseIdentifier(blockId);
-        var blockRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.BLOCK);
-        var block = blockRegistry.getValue(rl);
+        var blockRegistry = BuiltInRegistries.BLOCK;
+        var block = blockRegistry.getOptional(rl).orElse(null);
         if (block == null) {
             return false;
         }
@@ -429,8 +490,8 @@ final class RegistryOps {
 
     CompostableInfo contentRegistryGetCompostable(String itemId) {
         var rl = AdapterContext.parseIdentifier(itemId);
-        var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
-        var item = itemRegistry.getValue(rl);
+        var itemRegistry = BuiltInRegistries.ITEM;
+        var item = itemRegistry.getOptional(rl).orElse(null);
         if (item == null) {
             return CompostableInfo.notCompostable();
         }
@@ -449,8 +510,8 @@ final class RegistryOps {
 
     boolean contentRegistrySetCompostable(String itemId, float chance) {
         var rl = AdapterContext.parseIdentifier(itemId);
-        var itemRegistry = ctx.requireServer().registryAccess().lookupOrThrow(Registries.ITEM);
-        var item = itemRegistry.getValue(rl);
+        var itemRegistry = BuiltInRegistries.ITEM;
+        var item = itemRegistry.getOptional(rl).orElse(null);
         if (item == null) {
             return false;
         }
@@ -482,9 +543,13 @@ final class RegistryOps {
             }
             var cond = decoded.get();
             String typeId = cond.getType().id().toString();
+            //? if mc_gte_21_5 {
             net.minecraft.resources.RegistryOps.RegistryInfoLookup lookup =
                     buildRegistryInfoLookup();
             boolean matches = cond.test(lookup);
+            //?} else {
+            /*boolean matches = cond.test(ctx.requireServer().registryAccess());*/
+            //?}
             return new MinecraftAdapter.ResourceConditionResult(matches, typeId);
         } catch (RuntimeException re) {
             throw re;
@@ -578,11 +643,7 @@ final class RegistryOps {
         if (view.isResourceBlank()) {
             return new FluidStackInfo(true, "minecraft:empty", 0L, view.getCapacity());
         }
-        var id =
-                ctx.requireServer()
-                        .registryAccess()
-                        .lookupOrThrow(Registries.FLUID)
-                        .getKey(variant.getFluid());
+        var id = BuiltInRegistries.FLUID.getKey(variant.getFluid());
         String idStr = id == null ? "minecraft:empty" : id.toString();
         return new FluidStackInfo(false, idStr, view.getAmount(), view.getCapacity());
     }

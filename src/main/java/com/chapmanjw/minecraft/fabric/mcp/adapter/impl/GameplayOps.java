@@ -7,9 +7,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import net.minecraft.network.chat.Component;
-//? if mc_gte_21_11 {
-import net.minecraft.resources.Identifier;
-//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.bossevents.CustomBossEvent;
 import net.minecraft.server.level.ServerPlayer;

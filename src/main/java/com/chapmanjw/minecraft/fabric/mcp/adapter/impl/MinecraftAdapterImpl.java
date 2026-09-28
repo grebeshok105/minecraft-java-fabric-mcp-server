@@ -129,7 +129,12 @@ public final class MinecraftAdapterImpl implements MinecraftAdapter {
         double avgMspt = avgTickTimeNanos / 1_000_000.0;
         double avgTps = avgMspt > 0 ? Math.min(20.0, 1000.0 / avgMspt) : 20.0;
         return new ServerStatus(
-                SharedConstants.getCurrentVersion().name(),
+                SharedConstants.getCurrentVersion()
+                        //? if mc_gte_21_5 {
+                        .name(),
+                        //?} else {
+                        /*.getName(),*/
+                        //?}
                 FabricLoader.getInstance()
                         .getModContainer("fabricloader")
                         .map(m -> m.getMetadata().getVersion().getFriendlyString())
@@ -151,23 +156,31 @@ public final class MinecraftAdapterImpl implements MinecraftAdapter {
                 // what structure_file_write has to embed in the NBT it writes; exposing it here
                 // means a caller can read it instead of hardcoding a number that silently rots
                 // across Minecraft versions.
-                SharedConstants.getCurrentVersion().dataVersion().version(),
-                //? if mc_gte_21_11 {
                 SharedConstants.getCurrentVersion()
-                        .packVersion(net.minecraft.server.packs.PackType.SERVER_DATA)
-                        .major(),
-                //?} else {
-                /*SharedConstants.getCurrentVersion()
-                        .packVersion(net.minecraft.server.packs.PackType.SERVER_DATA),*/
-                //?}
-                //? if mc_gte_21_11 {
-                SharedConstants.getCurrentVersion()
-                        .packVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES)
-                        .major());
-                //?} else {
-                /*SharedConstants.getCurrentVersion()
-                        .packVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));*/
-                //?}
+                        //? if mc_gte_21_5 {
+                        .dataVersion().version(),
+                        //?} else {
+                        /*.getDataVersion().getVersion(),*/
+                        //?}
+                packMajor(net.minecraft.server.packs.PackType.SERVER_DATA),
+                packMajor(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));
+    }
+
+    // Pack versions: accessor is getPackVersion() through 1.21.4 and packVersion()
+    // from 1.21.5 on; the return type gained a .major() accessor in 1.21.11 (it was
+    // a plain int before). Both renames hide behind this helper so call sites stay
+    // gate-free.
+    private static int packMajor(net.minecraft.server.packs.PackType type) {
+        //? if mc_gte_21_5 {
+        var p = SharedConstants.getCurrentVersion().packVersion(type);
+        //?} else {
+        /*var p = SharedConstants.getCurrentVersion().getPackVersion(type);*/
+        //?}
+        //? if mc_gte_21_11 {
+        return p.major();
+        //?} else {
+        /*return p;*/
+        //?}
     }
 
     /**
@@ -1236,6 +1249,11 @@ public final class MinecraftAdapterImpl implements MinecraftAdapter {
 
     @Override
     public String runningMinecraftVersion() {
-        return SharedConstants.getCurrentVersion().name();
+        return SharedConstants.getCurrentVersion()
+                //? if mc_gte_21_5 {
+                .name();
+                //?} else {
+                /*.getName();*/
+                //?}
     }
 }

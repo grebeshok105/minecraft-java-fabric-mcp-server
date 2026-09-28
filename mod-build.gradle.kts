@@ -129,6 +129,44 @@ run {
         major > 1 || (major == 1 && minor > 21) || (major == 1 && minor == 21 && patch >= 11)
     }
     constPut?.invoke(constants, "mc_gte_21_11", mcGte2111)
+
+    // `mc_gte_21_2` -- true for Minecraft 1.21.2 and later. 1.21.2 reworked the
+    // recipe model: RecipeHolder.id() became a ResourceKey, Recipe gained
+    // placementInfo()/display()/group(), Ingredient.items() (Stream<Holder<Item>>)
+    // replaced getItems() (ItemStack[]), and RecipeManager.byKey takes a
+    // ResourceKey instead of a ResourceLocation.
+    val mcGte212 = run {
+        val parts = mcVersion.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+        major > 1 || (major == 1 && minor > 21) || (major == 1 && minor == 21 && patch >= 2)
+    }
+    constPut?.invoke(constants, "mc_gte_21_2", mcGte212)
+
+    // `mc_gte_21_5` -- true for Minecraft 1.21.5 and later. The 1.21.x registry/NBT
+    // rework completed here: RegistryAccess.registryOrThrow became lookupOrThrow
+    // (and lookup() now returns the Registry itself), Registry.get(id) became
+    // getValue(id) while get() started returning Optional<Holder>, entities moved
+    // to the ValueOutput NBT API (TagValueOutput + ProblemReporter.DISCARDING),
+    // MobSpawnType became EntitySpawnReason and Entity.moveTo became snapTo,
+    // AbstractFurnaceBlockEntity.getFuel() became server.fuelValues(), loot
+    // params moved to net.minecraft.util.context.ContextMap/ContextKeySet,
+    // WorldVersion/DataVersion became record-style accessors,
+    // LevelHeightAccessor.getMinBuildHeight became getMinY,
+    // StructureTemplate.fillFromWorld takes a List of ignored blocks,
+    // Biome gained the two-arg getPrecipitationAt and dry-foliage colors,
+    // reloadable registries expose HolderLookup.Provider instead of a raw
+    // RegistryAccess.Frozen/getKeys, and Fabric's ResourceCondition.test takes a
+    // RegistryOps.RegistryInfoLookup instead of HolderLookup.Provider.
+    val mcGte215 = run {
+        val parts = mcVersion.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+        major > 1 || (major == 1 && minor > 21) || (major == 1 && minor == 21 && patch >= 5)
+    }
+    constPut?.invoke(constants, "mc_gte_21_5", mcGte215)
 }
 
 // ---------------------------------------------------------------------------
